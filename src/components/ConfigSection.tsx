@@ -60,6 +60,12 @@ interface Credential {
   timestamp: string
 }
 
+// Add this type for better state management
+interface SelectedQuestion {
+  id: string;
+  title: string;
+}
+
 const prioritizeModels = (models: Model[]): Model[] => {
   return [...models].sort((a, b) => {
     const isPriorityA = a.id.startsWith('gpt-4o') || a.id.startsWith('claude-3-5-sonnet');
@@ -91,14 +97,14 @@ export function ConfigSection({
   imageFile,
   onImageFileChange,
   defaultImage,
-  selectedQuestionId,
   setSelectedQuestionId,
   reasoningQuestions
 }: ConfigSectionProps) {
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [showCredentials, setShowCredentials] = useState(false)
   const [isReasoningModalOpen, setIsReasoningModalOpen] = useState(false)
-  const [expandedQuestion, setExpandedQuestion] = useState<string | undefined>(undefined);
+  const [expandedQuestion, setExpandedQuestion] = useState<string | undefined>(undefined)
+  const [selectedQuestion, setSelectedQuestion] = useState<SelectedQuestion | null>(null)
 
   // 加载所有保存的凭据
   useEffect(() => {
@@ -165,6 +171,21 @@ export function ConfigSection({
       setExpandedQuestion(undefined);
     }
   }, [isReasoningModalOpen]);
+
+  // Add new function to handle question selection
+  const handleQuestionSelect = (questionId: string, title: string) => {
+    setSelectedQuestion({ id: questionId, title });
+    setExpandedQuestion(questionId);
+    setSelectedQuestionId(questionId);
+  };
+
+  // Add function to handle test initiation
+  const handleReasoningTest = () => {
+    if (selectedQuestion) {
+      setIsReasoningModalOpen(false);
+      handleTest('reasoning');
+    }
+  };
 
   return (
     <Card className="w-full">
@@ -473,11 +494,12 @@ export function ConfigSection({
                 {reasoningQuestions.map((q) => (
                   <AccordionItem key={q.id} value={q.id}>
                     <AccordionTrigger 
-                      className="hover:no-underline"
+                      className={`hover:no-underline ${
+                        selectedQuestion?.id === q.id ? 'bg-blue-50' : ''
+                      }`}
                       onClick={(e) => {
-                        // 防止触发按钮点击事件
                         e.stopPropagation();
-                        setExpandedQuestion(expandedQuestion === q.id ? undefined : q.id);
+                        handleQuestionSelect(q.id, q.title);
                       }}
                     >
                       <div className="flex items-center justify-between w-full pr-4">
@@ -492,25 +514,31 @@ export function ConfigSection({
                         <p className="text-sm">{q.question}</p>
                         <Button
                           className="w-full"
+                          variant={selectedQuestion?.id === q.id ? "default" : "outline"}
                           onClick={(e) => {
-                            e.stopPropagation(); // 防止事件冒泡
-                            const questionId = q.id; // 在闭包中保存当前问题ID
-                            setSelectedQuestionId(questionId);
-                            setIsReasoningModalOpen(false);
-                            setExpandedQuestion(undefined); // 重置手风琴状态
-                            // 确保状态更新后再触发测试
-                            setTimeout(() => {
-                              handleTest('reasoning');
-                            }, 0);
+                            e.stopPropagation();
+                            handleQuestionSelect(q.id, q.title);
+                            handleReasoningTest();
                           }}
                         >
-                          Select and Test
+                          {selectedQuestion?.id === q.id ? "Start Test" : "Select and Test"}
                         </Button>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
                 ))}
               </Accordion>
+              
+              {selectedQuestion && (
+                <div className="mt-4 flex justify-end">
+                  <Button 
+                    onClick={handleReasoningTest}
+                    className="w-full"
+                  >
+                    Test with {selectedQuestion.title}
+                  </Button>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
