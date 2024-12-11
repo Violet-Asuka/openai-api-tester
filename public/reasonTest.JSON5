@@ -1,0 +1,94 @@
+{
+  questions: [
+    {
+      id: "1",
+      title: "汉字构造 - 笪",
+      question: "竹字头下面一个旦是什么字?",
+      referenceAnswer: "竹字头下面一个旦是\"笪\"字。\n\"笪\"（dá）是一个汉字，主要用作姓氏。在中国古代，有一些人姓笪，现在仍有人使用这个姓氏，但比较少见。\n这个字的结构是：\n- 上部是\"竹\"部首\n- 下部是\"旦\"",
+      category: "language",
+      difficulty: "basic",
+      expectedConcepts: ["汉字结构", "部首", "姓氏"]
+    },
+    {
+      id: "2",
+      title: "密码破译 - 翻转谜题",
+      question: "有一天，美國中情局收到一封可疑的匿名信，打開里面有張字條:\" qS lHS IN\" 美國專家破譯了好久也沒成功，只能請教中國專家。中國專家看了一眼就說:\"你看反了\"。这个字条是什么意思？",
+      referenceAnswer: "让我帮你解开这个有趣的谜题。\n这是一个翻转的谜语。如果把纸条倒过来看，\"qS lHS IN\" 翻转后就变成:\n\"NI SHI sb\"\n这看起来像是\"NI SHI SB\"的变体，意思是\"你是SB\"（一个不太礼貌的短语）。\n这个谜语的巧妙之处在于:\n1. 利用了字母的翻转特性\n2. 小写字母\"l\"翻转后看起来像大写字母\"I\"\n3. 小写字母\"b\"翻转后看起来像小写字母\"q\"",
+      category: "puzzle",
+      difficulty: "intermediate",
+      expectedConcepts: ["字符翻转", "密码破译", "视觉思维"]
+    },
+    {
+      id: "3",
+      title: "字母计数 - Strawberry",
+      question: "How many 'r' in \"Strawberry\"?",
+      referenceAnswer: "Let me count the 'r' letters in \"Strawberry\" by marking each one:\n\nStr(1)awber(2)r(3)y\n\nThere are 3 'r' letters in \"Strawberry\".",
+      category: "language",
+      difficulty: "basic",
+      expectedConcepts: ["letter counting", "pattern recognition"]
+    },
+    {
+      id: "4",
+      title: "时效新闻 - 小米汽车",
+      question: "小米汽车Su7具体是什么日期发布的?有几个型号?售价是多少?",
+      referenceAnswer: "根据您提供的信息，小米汽车SU7于2023年12月28日举行了技术发布会, 于2024年3月21日正式发布销售，我可以分享一些主要信息：\n此车型分为三个版本：\n1. SU7标准版\n2. SU7 Pro版\n3. SU7 Max版\n\n关于售价：\n• SU7标准版：215,900元\n• SU7 Pro版：249,900元\n• SU7 Max版：299,900元",
+      category: "product",
+      difficulty: "basic",
+      expectedConcepts: ["产品信息", "价格", "型号"]
+    },
+    {
+      id: "5",
+      title: "逻辑推理 - 家庭关系",
+      question: "爱丽丝有M个姐妹,爱丽丝的兄弟有多少个姐妹?",
+      referenceAnswer: "让我们一步步思考这个问题：\n\n1. 首先，我们知道爱丽丝有M个姐妹\n2. 对于爱丽丝的兄弟来说：\n   - 他们的姐妹包括爱丽丝本人\n   - 他们的姐妹还包括爱丽丝的所有姐妹（也就是M个）\n\n3. 所以爱丽丝的兄弟的姐妹总数是：\n   - 爱丽丝本人（1个）\n   - 加上爱丽丝的姐妹（M个）\n   - 总共是：M + 1 个姐妹\n\n因此，爱丽丝的兄弟有 M + 1 个姐妹。",
+      category: "logic",
+      difficulty: "intermediate",
+      expectedConcepts: ["逻辑推理", "数学思维", "家庭关系"]
+    },
+    {
+      id: "6",
+      title: "Birds in the Tree",
+      question: "There are 9 birds in the tree, the hunter shoots one, how many birds are left in the tree?",
+      referenceAnswer: "1. Initially, there are 9 birds in the tree.\n\n2. The hunter shoots one bird.\n\n3. However, the important thing to consider is how the other birds would react to the sound of the gunshot.\n\n4. In reality, when a loud noise like a gunshot occurs near birds, they typically get frightened and fly away.\n\n5. So, even though only one bird was shot, it's highly likely that all the remaining birds would fly away due to the noise and perceived danger.\n\nTherefore, the most realistic answer is that there would be 0 birds left in the tree.",
+      category: "logic",
+      difficulty: "basic",
+      expectedConcepts: ["critical thinking", "real-world implications", "cause and effect"]
+    },
+    {
+      id: "7",
+      title: "音乐专辑 - Ariana Grande",
+      question: "Ariana Grande Eternal Sunshine 是什么时候发行的？",
+      referenceAnswer: "Ariana Grande的专辑\"Eternal Sunshine\"于2024年3月8日发行。\n\n这是Ariana Grande的第七张录音室专辑，也是她自2020年发行\"Positions\"以来的首张新专辑。专辑名称\"Eternal Sunshine\"（永恒的阳光）是对2004年同名电影《Eternal Sunshine of the Spotless Mind》（中文译名：《美丽心灵的永恒阳光》）的致敬。\n\n专辑包含多首单曲，其中lead single \"yes, and?\"于2024年1月12日提前发行，引起了广泛关注。",
+      category: "entertainment",
+      difficulty: "basic",
+      expectedConcepts: ["音乐发行", "专辑信息", "时间记录"]
+    },
+    {
+      id: "8",
+      title: "LED段码显示",
+      question: "已知8段共阳极LED数码管要显示字符\"5\"（a段为最低位），此时的段码为 ___。",
+      referenceAnswer: "共阳极LED数码管显示\"5\"的段码为92H或10110100B。",
+      category: "electronics",
+      difficulty: "intermediate",
+      expectedConcepts: ["数字电路", "LED显示", "段码编码"]
+    },
+    {
+      id: "9",
+      title: "单片机定时器",
+      question: "AT89S51采用6MHz的晶振，定时2ms，如用定时器方式1时的初值（16进制数）应为多少?",
+      referenceAnswer: "验证:从0xFC18计数到0xFFFF\n0xFFFF - 0xFC18 + 1 = 1000个机器周期\n1000 × 2μs = 2000μs = 2ms\n\n答案：0xFC18",
+      category: "electronics",
+      difficulty: "advanced",
+      expectedConcepts: ["单片机编程", "定时器计算", "机器周期"]
+    },
+    {
+      id: "10",
+      title: "物理 - 转动惯量",
+      question: "一个半圆形薄板质量为M，半径为R。当它以直径为轴转动时，转动惯量为多大？",
+      referenceAnswer: "半圆形薄板绕直径转动的转动惯量为 (MR^2)/4",
+      category: "physics",
+      difficulty: "advanced",
+      expectedConcepts: ["转动惯量", "物理计算", "力学"]
+    }
+  ]
+} 

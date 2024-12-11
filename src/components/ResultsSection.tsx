@@ -1,20 +1,35 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Check, ChevronDown, Timer } from "lucide-react"
-import { TestResult, TestType, ReasoningTestResult } from "@/types/apiTypes"
+import { TestResult, TestType, LoadingState } from "@/types/apiTypes"
 import { useState, useEffect, useRef } from "react"
 import { Progress } from "@/components/ui/progress"
+import { ColorTheme, ThemeColors } from '@/types/theme'
 
 interface ResultsSectionProps {
   testResult: TestResult | null;
   isStreaming: boolean;
   streamContent: string;
   testType: TestType;
-  loading: boolean;
+  loadingState: LoadingState;
   onAbort: () => void;
-  canAbort: boolean;
   timeElapsed: number;
   setTimeElapsed: (time: number | ((prev: number) => number)) => void;
+  theme: ColorTheme;
+  themeColors: ThemeColors;
+}
+
+// Add type for reasoning test response
+interface ReasoningResponse {
+  modelAnswer: string;
+  referenceAnswer: string;
+  metadata: {
+    category: string;
+    difficulty: string;
+    expectedConcepts: string[];
+    score?: number;
+    feedback?: string;
+  };
 }
 
 export function ResultsSection({
@@ -22,11 +37,11 @@ export function ResultsSection({
   isStreaming,
   streamContent,
   testType,
-  loading,
+  loadingState,
   onAbort,
-  canAbort,
   timeElapsed,
-  setTimeElapsed
+  setTimeElapsed,
+  themeColors,
 }: ResultsSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -40,7 +55,7 @@ export function ResultsSection({
     let progressInterval: NodeJS.Timeout
     let timeoutInterval: NodeJS.Timeout
 
-    if (loading) {
+    if (loadingState.type === 'test') {
       if (!hasReset.current) {
         setProgress(0)
         setTimeElapsed(0)
@@ -74,10 +89,11 @@ export function ResultsSection({
       clearInterval(progressInterval)
       clearInterval(timeoutInterval)
     }
-  }, [loading, onAbort, setTimeElapsed, TIMEOUT_DURATION])
+  }, [loadingState.type, onAbort, setTimeElapsed, TIMEOUT_DURATION])
 
   const getStatusText = () => {
-    if (loading) return `Testing ${testType}...`
+    if (loadingState.type === 'models') return "Loading models..."
+    if (loadingState.type === 'test') return `Testing ${testType}...`
     if (!testResult) return "Ready"
     if (isTimeout) return "Test Timed Out"
     if (testResult.error?.includes('aborted by user')) return "Test Aborted"
@@ -95,15 +111,15 @@ export function ResultsSection({
     return testResult.error
   }
 
-  // 添加进度指示器组件
+  // 添加进度指示器组
   const ProgressIndicator = () => (
     <div className="mb-6 space-y-2">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
-          {loading ? (
+          {loadingState.type ? (
             <Timer className="h-4 w-4 animate-pulse text-blue-500" />
           ) : testResult?.success ? (
-            <Check className="h-4 w-4 text-green-500" />
+            <Check className={`h-4 w-4 ${themeColors.accent}`} />
           ) : testResult ? (
             <AlertCircle className={`h-4 w-4 ${
               isTimeout ? 'text-orange-500' : 'text-red-500'
@@ -115,10 +131,10 @@ export function ResultsSection({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500">
-            {loading ? `${timeElapsed}s / 30s` : 
+            {loadingState.type === 'test' ? `${timeElapsed}s / 30s` : 
              testResult ? `Completed in ${timeElapsed}s` : ""}
           </span>
-          {canAbort && (
+          {loadingState.canAbort && (
             <Button
               onClick={onAbort}
               variant="destructive"
@@ -130,7 +146,7 @@ export function ResultsSection({
           )}
         </div>
       </div>
-      {(loading || testResult) && (
+      {(loadingState.type || testResult) && (
         <Progress 
           value={progress} 
           className={`h-2 ${isTimeout ? 'bg-orange-100' : ''}`} 
@@ -231,7 +247,7 @@ export function ResultsSection({
         {
           title: '测试概况',
           items: [
-            { label: '温度设置', value: details.temperature },
+            { label: '温度置', value: details.temperature },
             { label: '总测试次数', value: details.totalTests },
             { label: '成功测试', value: details.successfulTests },
             { label: '失败测试', value: details.failedTests },
@@ -290,7 +306,7 @@ export function ResultsSection({
     const details = response?.rawResponse?.mathDetails;
     const testResults = response?.rawResponse?.testResults;
     
-    // 如果有批量测试结果，优先显示批量测试结果
+    // 如果有批量测试结果，优先��示批量测试结果
     if (testResults) {
       return (
         <div className="space-y-6">
@@ -372,159 +388,178 @@ export function ResultsSection({
     return response?.content;
   }
 
-  return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Results</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ProgressIndicator />
-        {testResult && (
-          <div className="space-y-4">
-            {/* Result Card */}
-            <Card className={`border-l-4 ${
-              testResult.success ? "border-l-green-500" : 
-              isTimeout ? "border-l-orange-500" :
-              testResult.response?.rawResponse?.warning ? "border-l-yellow-500" : 
-              "border-l-red-500"
-            }`}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center space-x-2">
-                  {testResult.success ? (
-                    <Check className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <AlertCircle className={`h-5 w-5 ${
-                      isTimeout ? 'text-orange-500' : 'text-red-500'
-                    }`} />
-                  )}
-                  <CardTitle className="text-lg">
-                    {testResult.success ? "Test Successful" : 
-                     isTimeout ? "Test Timed Out" :
-                     testResult.response?.rawResponse?.warning ? "Test Warning" : 
-                     "Test Failed"}
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {testResult.success || testResult.response?.rawResponse?.warning ? (
-                  <div className="space-y-3">
-                    <div className="p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-medium mb-2">Response:</h4>
-                      {isStreaming ? (
-                        <div className="relative">
-                          <p className="text-gray-700 whitespace-pre-wrap">
-                            {streamContent}
-                            <span className="animate-pulse">▋</span>
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-gray-700 whitespace-pre-wrap">
-                          {testType === 'latency' ? (
-                            formatLatencyResponse(testResult.response)
-                          ) : testType === 'temperature' ? (
-                            renderTemperatureResponse(formatTemperatureResponse(testResult.response))
-                          ) : testType === 'math' ? (
-                            formatMathResponse(testResult.response)
-                          ) : testType === 'reasoning' ? (
-                            <div className="space-y-4">
-                              {/* Cast testResult and access the correct data structure */}
-                              {(() => {
-                                const modelAnswer = testResult.response?.rawResponse?.modelAnswer;
-                                const referenceAnswer = testResult.response?.rawResponse?.referenceAnswer;
-                                const metadata = testResult.response?.rawResponse?.metadata;
-                                
-                                return (
-                                  <>
-                                    <div className="bg-white p-4 rounded-lg shadow">
-                                      <h3 className="font-medium">Model Answer:</h3>
-                                      <p className="mt-2">{modelAnswer}</p>
-                                    </div>
-                                    <div className="bg-white p-4 rounded-lg shadow">
-                                      <h3 className="font-medium">Reference Answer:</h3>
-                                      <p className="mt-2">{referenceAnswer}</p>
-                                    </div>
-                                    {metadata && (
-                                      <div className="bg-white p-4 rounded-lg shadow">
-                                        <h3 className="font-medium">Metadata:</h3>
-                                        <div className="mt-2 space-y-1">
-                                          <p><span className="font-medium">Category:</span> {metadata.category}</p>
-                                          <p><span className="font-medium">Difficulty:</span> {metadata.difficulty}</p>
-                                          <p><span className="font-medium">Expected Concepts:</span> {metadata.expectedConcepts.join(", ")}</p>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          ) : (
-                            <p>{testResult.response?.content}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+  // Update the reasoning result rendering section
+  function formatReasoningResponse(response: any) {
+    const reasoningResponse = response?.rawResponse as ReasoningResponse;
+    
+    if (!reasoningResponse) {
+      return response?.content;
+    }
 
-                    {/* Function Call Details */}
-                    {testResult.success && testResult.response?.functionCall && (
-                      <div className="mt-4 space-y-3">
-                        <div className="p-4 bg-gray-100 rounded-lg">
-                          <h4 className="font-medium mb-2">Function Call Details:</h4>
-                          <div className="space-y-2">
-                            <p>
-                              <span className="font-medium">Function:</span> {testResult.response.functionCall.name}
-                            </p>
-                            <div>
-                              <p className="font-medium">Arguments:</p>
-                              <pre className="mt-1 p-2 bg-gray-50 rounded text-sm">
-                                {JSON.stringify(testResult.response.functionCall.arguments, null, 2)}
-                              </pre>
-                            </div>
-                            <div>
-                              <p className="font-medium">Result:</p>
-                              <pre className="mt-1 p-2 bg-gray-50 rounded text-sm">
-                                {JSON.stringify(testResult.response.functionCall.result, null, 2)}
-                              </pre>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-red-600">{testResult.error}</p>
-                )}
-              </CardContent>
-            </Card>
+    return (
+      <div className="space-y-4">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="font-medium">Model Answer:</h3>
+          <p className="mt-2">{reasoningResponse.modelAnswer}</p>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="font-medium">Reference Answer:</h3>
+          <p className="mt-2">{reasoningResponse.referenceAnswer}</p>
+        </div>
 
-            {/* Raw Response Section */}
-            <div className="bg-gray-50 rounded-lg">
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <span className="flex items-center text-sm font-medium">
-                  <ChevronDown
-                    className={`h-4 w-4 mr-2 transition-transform duration-200 ${
-                      isExpanded ? "transform rotate-180" : ""
-                    }`}
-                  />
-                  View Raw Response
-                </span>
-              </button>
-
-              {isExpanded && (
-                <div className="px-4 pb-4">
-                  <pre className="p-4 bg-gray-100 rounded-md text-sm overflow-auto max-h-96">
-                    {testType === 'stream' 
-                      ? testResult.response?.rawResponse?.chunks?.join('\n')
-                      : JSON.stringify(testResult.response?.rawResponse ?? testResult.response, null, 2)
-                    }
-                  </pre>
+        {reasoningResponse.metadata && (
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="font-medium">Analysis:</h3>
+            <div className="mt-2 space-y-2">
+              <p><span className="font-medium">Category:</span> {reasoningResponse.metadata.category}</p>
+              <p><span className="font-medium">Difficulty:</span> {reasoningResponse.metadata.difficulty}</p>
+              <p><span className="font-medium">Expected Concepts:</span> {reasoningResponse.metadata.expectedConcepts.join(", ")}</p>
+              {reasoningResponse.metadata.score !== undefined && (
+                <p><span className="font-medium">Score:</span> {reasoningResponse.metadata.score}/100</p>
+              )}
+              {reasoningResponse.metadata.feedback && (
+                <div>
+                  <span className="font-medium">Feedback:</span>
+                  <p className="mt-1 text-gray-600">{reasoningResponse.metadata.feedback}</p>
                 </div>
               )}
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  return (
+    <Card className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${themeColors.border}`}>
+      <CardHeader className="flex-none pb-4">
+        <CardTitle className="text-xl font-semibold text-gray-800">
+          Results
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-hidden">
+        {/* Add scrollable container with custom scrollbar */}
+        <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-violet-200/50 scrollbar-track-transparent pr-2">
+          <div className="space-y-6">
+            <ProgressIndicator />
+            {testResult && (
+              <div className="space-y-6">
+                {/* Result Card */}
+                <Card className={`border-none shadow-md rounded-2xl overflow-hidden ${
+                  testResult.success 
+                    ? `bg-gradient-to-r ${themeColors.background} border ${themeColors.border}` 
+                    : "bg-gradient-to-r from-rose-50/80 to-red-50/80 border border-rose-100/30"
+                }`}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center space-x-2">
+                      {testResult.success ? (
+                        <Check className={`h-5 w-5 ${themeColors.accent}`} />
+                      ) : (
+                        <AlertCircle className={`h-5 w-5 ${
+                          isTimeout ? 'text-orange-500' : 'text-red-500'
+                        }`} />
+                      )}
+                      <CardTitle className="text-lg">
+                        {testResult.success ? "Test Successful" : 
+                         isTimeout ? "Test Timed Out" :
+                         testResult.response?.rawResponse?.warning ? "Test Warning" : 
+                         "Test Failed"}
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {testResult.success || testResult.response?.rawResponse?.warning ? (
+                      <div className="space-y-3">
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h4 className="font-medium mb-2">Response:</h4>
+                          {isStreaming ? (
+                            <div className="relative">
+                              <p className="text-gray-700 whitespace-pre-wrap">
+                                {streamContent}
+                                <span className="animate-pulse">▋</span>
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-gray-700 whitespace-pre-wrap">
+                              {testType === 'latency' ? (
+                                formatLatencyResponse(testResult.response)
+                              ) : testType === 'temperature' ? (
+                                renderTemperatureResponse(formatTemperatureResponse(testResult.response))
+                              ) : testType === 'math' ? (
+                                formatMathResponse(testResult.response)
+                              ) : testType === 'reasoning' ? (
+                                formatReasoningResponse(testResult.response)
+                              ) : (
+                                <p>{testResult.response?.content}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Function Call Details */}
+                        {testResult.success && testResult.response?.functionCall && (
+                          <div className="mt-4 space-y-3">
+                            <div className="p-4 bg-gray-100 rounded-lg">
+                              <h4 className="font-medium mb-2">Function Call Details:</h4>
+                              <div className="space-y-2">
+                                <p>
+                                  <span className="font-medium">Function:</span> {testResult.response.functionCall.name}
+                                </p>
+                                <div>
+                                  <p className="font-medium">Arguments:</p>
+                                  <pre className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                                    {JSON.stringify(testResult.response.functionCall.arguments, null, 2)}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <p className="font-medium">Result:</p>
+                                  <pre className="mt-1 p-2 bg-gray-50 rounded text-sm">
+                                    {JSON.stringify(testResult.response.functionCall.result, null, 2)}
+                                  </pre>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-red-600">{testResult.error}</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Raw Response Section */}
+                <div className={`bg-white/60 backdrop-blur-sm rounded-2xl border ${themeColors.border}`}>
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className={`w-full px-6 py-4 flex items-center justify-between ${themeColors.button} rounded-xl transition-all duration-200`}
+                  >
+                    <span className="flex items-center text-sm font-medium">
+                      <ChevronDown
+                        className={`h-4 w-4 mr-2 transition-transform duration-200 ${
+                          isExpanded ? "transform rotate-180" : ""
+                        }`}
+                      />
+                      View Raw Response
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-6 pb-6">
+                      <pre className={`p-4 bg-gradient-to-br ${themeColors.background} backdrop-blur-sm rounded-xl ring-1 ${themeColors.border} text-sm overflow-auto max-h-96`}>
+                        {testType === 'stream' 
+                          ? testResult.response?.rawResponse?.chunks?.join('\n')
+                          : JSON.stringify(testResult.response?.rawResponse ?? testResult.response, null, 2)
+                        }
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   )

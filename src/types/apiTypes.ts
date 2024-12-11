@@ -138,4 +138,11 @@ export interface ReasoningTestResult extends TestResult {
   modelAnswer?: string;
   similarity?: number;
   referenceAnswer?: string;
+}
+
+export type LoadingType = 'models' | 'test' | null;
+
+export interface LoadingState {
+  type: LoadingType;
+  canAbort: boolean;
 } 

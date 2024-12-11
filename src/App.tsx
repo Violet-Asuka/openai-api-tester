@@ -1,7 +1,7 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ConfigSection } from "@/components/ConfigSection"
 import { ResultsSection } from "@/components/ResultsSection"
-import { TestResult, Model, Tool, TestType } from "@/types/apiTypes"
+import { TestResult, Model, Tool, TestType, LoadingState } from "@/types/apiTypes"
 import { testConnection } from "@/tools/connectionTest"
 import { testChat } from "@/tools/chatTest"
 import { testStream } from "@/tools/streamTest"
@@ -12,6 +12,7 @@ import { testTemperature } from "@/tools/temperatureTest"
 import { testMath } from "@/tools/mathTest"
 import { testReasoning, getReasoningQuestions } from "@/tools/reasoningTest"
 import { ReasoningQuestion } from "@/types/apiTypes"
+import { ColorTheme, colorThemes } from '@/types/theme'
 
 function App() {
   // State management
@@ -20,7 +21,7 @@ function App() {
   const [model, setModel] = useState<string>("")
   const [modelList, setModelList] = useState<Model[]>([])
   const [prompt, setPrompt] = useState<string>("")
-  const [loading, setLoading] = useState<boolean>(false)
+  const [loading, _setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
   const [testResult, setTestResult] = useState<TestResult | null>(null)
   const [smartInput, setSmartInput] = useState<string>("")
@@ -75,13 +76,45 @@ function App() {
       }
     }
   ])
+  const [loadingState, setLoadingState] = useState<LoadingState>({
+    type: null,
+    canAbort: false
+  })
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [timeElapsed, setTimeElapsed] = useState(0)
   const TIMEOUT_DURATION = 30
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [defaultImage] = useState<string>('/example.jpg')
   const [selectedQuestionId, setSelectedQuestionId] = useState<string>("")
-  const [reasoningQuestions] = useState<ReasoningQuestion[]>(getReasoningQuestions())
+  const [reasoningQuestions, setReasoningQuestions] = useState<ReasoningQuestion[]>([]);
+  const [_isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [currentTheme, setCurrentTheme] = useState<ColorTheme>('ocean');
+
+  useEffect(() => {
+    let mounted = true;
+    
+    const loadQuestions = async () => {
+      try {
+        setIsLoadingQuestions(true);
+        const questions = await getReasoningQuestions();
+        if (mounted) {
+          setReasoningQuestions(questions);
+        }
+      } catch (error) {
+        console.error('Failed to load questions:', error);
+      } finally {
+        if (mounted) {
+          setIsLoadingQuestions(false);
+        }
+      }
+    };
+
+    loadQuestions();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Improved base URL processing function
   const processBaseUrl = (url: string): string => {
@@ -122,13 +155,10 @@ function App() {
   const handleTest = async (type: TestType) => {
     if (!validateConfig()) return
     
-    // 创建新的 AbortController
+    abortController?.abort()
     const controller = new AbortController()
     setAbortController(controller)
-    
-    setLoading(true)
-    setError("")
-    setTestResult(null)
+    setLoadingState({ type: 'test', canAbort: true })
     
     try {
       let result: TestResult
@@ -244,51 +274,59 @@ function App() {
         })
       }
     } finally {
-      setLoading(false)
-      setIsStreaming(false)
+      setLoadingState({ type: null, canAbort: false })
       setAbortController(null)
     }
   }
 
-  // Modified fetch model list function
+  // Modify fetchModelList function
   const fetchModelList = async () => {
-    if (!baseUrl || !apiKey) return
-
-    setLoading(true)
-    setError("")
-    setModelList([])
-
+    if (!validateConfig()) return
+    
+    abortController?.abort()
+    const controller = new AbortController()
+    setAbortController(controller)
+    setLoadingState({ type: 'models', canAbort: true })
+    
     try {
       const response = await fetch(`${baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-      })
+        signal: controller.signal
+      });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch models: ${response.status}`)
+        throw new Error(`Failed to fetch models: ${response.status}`);
       }
 
-      const data = await response.json()
-      const models = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : []
-      setModelList(models)
+      const data = await response.json();
+      const models = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+      setModelList(models);
     } catch (error: any) {
-      setError(error.message || "Failed to fetch models")
+      if (error.name === 'AbortError') {
+        setError("Model list fetch aborted");
+      } else {
+        setError(error.message || "Failed to fetch models");
+      }
     } finally {
-      setLoading(false)
+      setLoadingState({ type: null, canAbort: false })
+      setAbortController(null)
     }
-  }
+  };
 
   // 添加终止函数
   const handleAbort = () => {
     if (abortController) {
       abortController.abort()
-      setLoading(false)
-      setIsStreaming(false)
+      setLoadingState({ type: null, canAbort: false })
+      setAbortController(null)
       setTestResult({
         success: false,
-        error: "Test aborted by user"
+        error: loadingState.type === 'test' && timeElapsed >= TIMEOUT_DURATION 
+          ? "Request timed out after 30 seconds"
+          : "Test aborted by user"
       })
     }
   }
@@ -300,50 +338,90 @@ function App() {
     }
   }
 
+  // 添加主题切换按钮组件
+  const ThemeSelector = () => (
+    <div className="absolute top-4 right-6 flex items-center gap-2">
+      {(Object.keys(colorThemes) as ColorTheme[]).map((theme) => (
+        <button
+          key={theme}
+          onClick={() => setCurrentTheme(theme)}
+          className={`w-8 h-8 rounded-full border-2 transition-all ${
+            currentTheme === theme 
+              ? 'scale-110 shadow-lg border-white' 
+              : 'border-transparent hover:scale-105'
+          } bg-gradient-to-br ${colorThemes[theme].background}`}
+          title={theme.charAt(0).toUpperCase() + theme.slice(1)}
+        />
+      ))}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen min-w-screen bg-gray-50">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* ConfigSection takes up 4 columns (1/3) on large screens */}
-          <div className="lg:col-span-4">
-            <ConfigSection
-              baseUrl={baseUrl}
-              setBaseUrl={setBaseUrl}
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              model={model}
-              setModel={setModel}
-              modelList={modelList}
-              prompt={prompt}
-              setPrompt={setPrompt}
-              loading={loading}
-              error={error}
-              testType={testType}
-              handleTest={handleTest}
-              fetchModelList={fetchModelList}
-              smartInput={smartInput}
-              handleSmartInput={handleSmartInput}
-              imageFile={imageFile}
-              onImageFileChange={handleImageFileChange}
-              defaultImage={defaultImage}
-              selectedQuestionId={selectedQuestionId}
-              setSelectedQuestionId={setSelectedQuestionId}
-              reasoningQuestions={reasoningQuestions}
-            />
-          </div>
-          {/* ResultsSection takes up 8 columns (2/3) on large screens */}
-          <div className="lg:col-span-8">
-            <ResultsSection
-              testResult={testResult}
-              isStreaming={isStreaming}
-              streamContent={streamContent}
-              testType={testType}
-              loading={loading}
-              onAbort={handleAbort}
-              canAbort={!!abortController}
-              timeElapsed={timeElapsed}
-              setTimeElapsed={setTimeElapsed}
-            />
+    <div className={`h-screen w-screen overflow-hidden bg-gradient-to-br ${colorThemes[currentTheme].background}`}>
+      {/* Header */}
+      <div className={`w-full h-16 bg-white/70 backdrop-blur-md border-b ${colorThemes[currentTheme].border} sticky top-0 z-10 shadow-sm`}>
+        <div className="w-full h-full max-w-7xl mx-auto px-6 flex flex-col justify-center">
+          <h1 className={`text-2xl font-bold bg-gradient-to-r ${colorThemes[currentTheme].header} bg-clip-text text-transparent`}>
+            OpenAI API Tester
+          </h1>
+          <p className="text-sm text-gray-600 font-medium">
+            A simple tool to test and validate your OpenAI API endpoints
+          </p>
+        </div>
+        <ThemeSelector />
+      </div>
+
+      {/* Main content */}
+      <div className="w-full h-[calc(100vh-4rem)] overflow-hidden">
+        <div className="w-full h-full max-w-7xl mx-auto px-6 py-6">
+          <div className="h-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Config section */}
+            <div className="lg:col-span-5 h-full overflow-hidden">
+              <ConfigSection
+                baseUrl={baseUrl}
+                setBaseUrl={setBaseUrl}
+                apiKey={apiKey}
+                setApiKey={setApiKey}
+                model={model}
+                setModel={setModel}
+                modelList={modelList}
+                prompt={prompt}
+                setPrompt={setPrompt}
+                loading={loading}
+                error={error}
+                testType={testType}
+                handleTest={handleTest}
+                fetchModelList={fetchModelList}
+                smartInput={smartInput}
+                handleSmartInput={handleSmartInput}
+                imageFile={imageFile}
+                onImageFileChange={handleImageFileChange}
+                defaultImage={defaultImage}
+                selectedQuestionId={selectedQuestionId}
+                setSelectedQuestionId={setSelectedQuestionId}
+                reasoningQuestions={reasoningQuestions}
+                loadingState={loadingState}
+                onAbort={handleAbort}
+                theme={currentTheme}
+                themeColors={colorThemes[currentTheme]}
+              />
+            </div>
+            
+            {/* Results section */}
+            <div className="lg:col-span-7 h-full overflow-hidden">
+              <ResultsSection
+                testResult={testResult}
+                isStreaming={isStreaming}
+                streamContent={streamContent}
+                testType={testType}
+                onAbort={handleAbort}
+                timeElapsed={timeElapsed}
+                setTimeElapsed={setTimeElapsed}
+                loadingState={loadingState}
+                theme={currentTheme}
+                themeColors={colorThemes[currentTheme]}
+              />
+            </div>
           </div>
         </div>
       </div>
