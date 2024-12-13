@@ -1,7 +1,15 @@
 #!/bin/bash
 
 echo "Pulling latest changes..."
-git pull origin main
+# Stash any local changes
+git stash -u
+
+# Force pull from remote
+git fetch origin main
+git reset --hard origin/main
+
+# Reapply local changes if needed
+git stash pop || true
 
 # Check if there are merge conflicts
 if [ $? -ne 0 ]; then
