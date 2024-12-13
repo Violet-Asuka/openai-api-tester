@@ -10,5 +10,4 @@ services:
 
 networks:
   app_network:
-    external: true  # 连接到 1panel 创建的网络
-    name: 1panel_default  # 使用 1panel 的默认网络名称
+    driver: bridge
