@@ -8,7 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Palette } from "lucide-react"
+import { Github, Palette, ExternalLink } from "lucide-react"
 
 function App() {
   const { theme, setTheme } = useTestStore()
@@ -27,32 +27,55 @@ function App() {
             </p>
           </div>
 
-          {/* Theme Selector */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="icon" className="w-10 h-10">
-                <Palette className="h-5 w-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-56" align="end">
-              <div className="space-y-1">
-                {Object.entries(colorThemes).map(([themeKey]) => (
-                  <div
-                    key={themeKey}
-                    className={`flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 cursor-pointer ${
-                      theme === themeKey ? 'bg-gray-50' : ''
-                    }`}
-                    onClick={() => setTheme(themeKey as ColorTheme)}
-                  >
-                    <span className="text-sm capitalize">{themeKey}</span>
-                    {theme === themeKey && (
-                      <span className="text-xs text-gray-500">Active</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            {/* GitHub Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10"
+              onClick={() => window.open('https://github.com/Violet-Asuka/openai-api-tester', '_blank')}
+            >
+              <Github className="h-5 w-5" />
+            </Button>
+
+            {/* Live Demo Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="w-10 h-10"
+              onClick={() => window.open('https://openai-api-tester.vercel.app', '_blank')}
+            >
+              <ExternalLink className="h-5 w-5" />
+            </Button>
+
+            {/* Theme Selector */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="w-10 h-10">
+                  <Palette className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56" align="end">
+                <div className="space-y-1">
+                  {Object.entries(colorThemes).map(([themeKey]) => (
+                    <div
+                      key={themeKey}
+                      className={`flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 cursor-pointer ${
+                        theme === themeKey ? 'bg-gray-50' : ''
+                      }`}
+                      onClick={() => setTheme(themeKey as ColorTheme)}
+                    >
+                      <span className="text-sm capitalize">{themeKey}</span>
+                      {theme === themeKey && (
+                        <span className="text-xs text-gray-500">Active</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </div>
 
