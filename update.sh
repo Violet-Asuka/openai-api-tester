@@ -1,15 +1,13 @@
 #!/bin/bash
 
 echo "Pulling latest changes..."
-# Stash any local changes
-git stash -u
+git pull origin main
 
-# Force pull from remote
-git fetch origin main
-git reset --hard origin/main
-
-# Reapply local changes if needed
-git stash pop || true
+# Check if there are merge conflicts
+if [ $? -ne 0 ]; then
+  echo "Error: Merge conflicts detected. Please resolve them manually."
+  exit 1
+fi
 
 echo "Stopping containers..."
 docker-compose down
