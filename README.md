@@ -115,6 +115,22 @@ This project is open source and available under the MIT License.
 - The React and Tailwind CSS communities
 - All contributors who help improve this project
 
+## 🚀 Deployment
+
+### Deploy on Vercel
+
+The easiest way to deploy this app is to use the [Vercel Platform](https://vercel.com).
+
+1. Fork this repository
+2. Import your fork to Vercel:
+   - Go to [Vercel](https://vercel.com)
+   - Click "New Project"
+   - Select your fork of this repository
+   - Vercel will automatically detect the correct settings
+3. Deploy! 🎉
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FViolet-Asuka%2Fopenai-api-tester)
+
 ---
 
 <div align="center">
