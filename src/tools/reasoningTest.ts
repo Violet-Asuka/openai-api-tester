@@ -1,4 +1,4 @@
-import { TestResult, ReasoningQuestion } from '@/types/apiTypes';
+import { TestResult, TestStatus, ReasoningQuestion } from '@/types/apiTypes';
 import JSON5 from 'json5';
 
 interface ReasoningData {
@@ -12,16 +12,27 @@ let reasoningQuestions: ReasoningQuestion[] = [];
 // 加载函数
 async function loadReasoningQuestions(): Promise<ReasoningQuestion[]> {
   try {
-    const response = await fetch('/reasonTest.JSON5');
+    console.log('Fetching questions...');
+    const response = await fetch('/reasonTest.JSON5', {
+      headers: {
+        'Accept': 'application/json, text/plain, */*'
+      }
+    });
+    
     if (!response.ok) {
-      throw new Error(`Failed to load questions: ${response.status} ${response.statusText}`);
+      console.error(`Failed to load questions: ${response.status} ${response.statusText}`);
+      return [];
     }
     
     const text = await response.text();
+    console.log('Received text:', text.substring(0, 100) + '...');
+    
     const data = JSON5.parse(text) as ReasoningData;
+    console.log('Parsed questions count:', data.questions?.length);
     
     if (!Array.isArray(data.questions)) {
-      throw new Error('Invalid data format: questions array not found');
+      console.error('Invalid data format: questions array not found');
+      return [];
     }
     
     reasoningQuestions = data.questions;
@@ -34,15 +45,28 @@ async function loadReasoningQuestions(): Promise<ReasoningQuestion[]> {
 
 // 导出的获取问题函数
 export async function getReasoningQuestions(): Promise<ReasoningQuestion[]> {
-  if (reasoningQuestions.length > 0) {
-    return reasoningQuestions;
-  }
+  try {
+    if (reasoningQuestions.length > 0) {
+      return reasoningQuestions;
+    }
 
-  if (!loadingPromise) {
-    loadingPromise = loadReasoningQuestions();
-  }
+    if (!loadingPromise) {
+      loadingPromise = loadReasoningQuestions();
+    }
 
-  return loadingPromise;
+    const questions = await loadingPromise;
+    
+    // 重置 loadingPromise 如果加载失败
+    if (questions.length === 0) {
+      loadingPromise = null;
+    }
+    
+    return questions;
+  } catch (error) {
+    console.error('Error getting reasoning questions:', error);
+    loadingPromise = null;
+    return [];
+  }
 }
 
 // 测试函数
@@ -98,9 +122,13 @@ export async function testReasoning(
 
     return {
       success: true,
+      status: TestStatus.SUCCESS,
       response: {
         content: modelAnswer,
-        rawResponse: {
+        type: 'reasoning',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: {
           modelAnswer,
           referenceAnswer: question.referenceAnswer,
           metadata: {
@@ -111,6 +139,12 @@ export async function testReasoning(
             model: model
           },
           apiResponse: data
+        },
+        details: {
+          category: question.category,
+          difficulty: question.difficulty,
+          expectedConcepts: question.expectedConcepts,
+          referenceAnswer: question.referenceAnswer
         }
       }
     };

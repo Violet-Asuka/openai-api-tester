@@ -1,6 +1,6 @@
 export type ColorTheme = 'ocean' | 'lavender' | 'sunset' | 'forest' | 'rose' | 'monochrome' | 'light' | 'dark';
 
-interface ThemeConfig {
+export interface ThemeConfig {
   background: string;
   header: string;
   border: string;

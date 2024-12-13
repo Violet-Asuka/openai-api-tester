@@ -126,7 +126,7 @@ export default {
     },
     plugins: [
         tailwindcssAnimate,
-        require('tailwind-scrollbar'),
+        require('tailwind-scrollbar')({ nocompatible: true }),
         function({ addUtilities }) {
             const newUtilities = {
                 '.backdrop-blur-2xl': {
@@ -142,7 +142,7 @@ export default {
         }
     ],
     variants: {
-        scrollbar: ['rounded'],
+        scrollbar: ['rounded', 'hover'],
         extend: {
             opacity: ['group-hover'],
             scale: ['group-hover'],

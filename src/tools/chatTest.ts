@@ -1,4 +1,4 @@
-import { TestResult } from "@/types/apiTypes"
+import { TestResult, TestStatus } from "@/types/apiTypes"
 
 export async function testChat(
   baseUrl: string, 
@@ -30,11 +30,27 @@ export async function testChat(
 
     const data = await response.json()
     
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format from API')
+    }
+
+    const content = data.choices[0].message.content
+    
     return {
       success: true,
+      status: TestStatus.SUCCESS,
       response: {
-        content: data.choices[0]?.message?.content || '',
-        rawResponse: data
+        content,
+        type: 'chat',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: {
+          apiResponse: data,
+          metrics: {
+            responseLength: content.length,
+            timestamp: new Date().toISOString()
+          }
+        }
       }
     }
   } catch (error: any) {
@@ -43,7 +59,15 @@ export async function testChat(
     }
     return {
       success: false,
-      error: error.message || 'Chat test failed'
+      status: TestStatus.ERROR,
+      error: error.message || 'Chat test failed',
+      response: {
+        content: '',
+        type: 'chat',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: { error: error.message }
+      }
     }
   }
 } 

@@ -1,566 +1,720 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { FC, useEffect, useState } from 'react';
+import { useTestStore } from '@/store/testStore'
+import { FunctionCall, TestResult, TestStatus } from '@/types/apiTypes'
+import { colorThemes } from '@/types/theme'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Check, ChevronDown, Timer } from "lucide-react"
-import { TestResult, TestType, LoadingState } from "@/types/apiTypes"
-import { useState, useEffect, useRef } from "react"
-import { Progress } from "@/components/ui/progress"
-import { ColorTheme, ThemeColors } from '@/types/theme'
+import { Loader2 } from "lucide-react"
 
-interface ResultsSectionProps {
-  testResult: TestResult | null;
-  isStreaming: boolean;
-  streamContent: string;
-  testType: TestType;
-  loadingState: LoadingState;
-  onAbort: () => void;
-  timeElapsed: number;
-  setTimeElapsed: (time: number | ((prev: number) => number)) => void;
-  theme: ColorTheme;
-  themeColors: ThemeColors;
-}
-
-// Add type for reasoning test response
-interface ReasoningResponse {
-  modelAnswer: string;
-  referenceAnswer: string;
-  metadata: {
-    category: string;
-    difficulty: string;
-    expectedConcepts: string[];
-    score?: number;
-    feedback?: string;
-  };
-}
-
-export function ResultsSection({
-  testResult,
-  isStreaming,
-  streamContent,
-  testType,
-  loadingState,
-  onAbort,
-  timeElapsed,
-  setTimeElapsed,
-  themeColors,
-}: ResultsSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const TIMEOUT_DURATION = 30
-  const hasReset = useRef(false)
-  
-  // 计算超时状态
-  const isTimeout = timeElapsed >= TIMEOUT_DURATION
-
-  useEffect(() => {
-    let progressInterval: NodeJS.Timeout
-    let timeoutInterval: NodeJS.Timeout
-
-    if (loadingState.type === 'test') {
-      if (!hasReset.current) {
-        setProgress(0)
-        setTimeElapsed(0)
-        hasReset.current = true
-      }
-
-      progressInterval = setInterval(() => {
-        setProgress(prev => {
-          const increment = Math.random() * 15
-          return Math.min(prev + increment, 90)
-        })
-      }, 1000)
-
-      timeoutInterval = setInterval(() => {
-        setTimeElapsed(prev => {
-          const newTime = prev + 1
-          if (newTime >= TIMEOUT_DURATION) {
-            clearInterval(progressInterval)
-            clearInterval(timeoutInterval)
-            onAbort()
-          }
-          return newTime
-        })
-      }, 1000)
-    } else {
-      setProgress(100)
-      hasReset.current = false
-    }
-
-    return () => {
-      clearInterval(progressInterval)
-      clearInterval(timeoutInterval)
-    }
-  }, [loadingState.type, onAbort, setTimeElapsed, TIMEOUT_DURATION])
-
-  const getStatusText = () => {
-    if (loadingState.type === 'models') return "Loading models..."
-    if (loadingState.type === 'test') return `Testing ${testType}...`
-    if (!testResult) return "Ready"
-    if (isTimeout) return "Test Timed Out"
-    if (testResult.error?.includes('aborted by user')) return "Test Aborted"
-    return testResult.success ? "Test Complete" : "Test Failed"
-  }
-
-  const getErrorText = () => {
-    if (!testResult?.error) return null
-    if (isTimeout) {
-      return "Request timed out after 30 seconds"
-    }
-    if (testResult.error?.includes('aborted by user')) {
-      return "Test aborted by user"
-    }
-    return testResult.error
-  }
-
-  // 添加进度指示器组
-  const ProgressIndicator = () => (
-    <div className="mb-6 space-y-2">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          {loadingState.type ? (
-            <Timer className="h-4 w-4 animate-pulse text-blue-500" />
-          ) : testResult?.success ? (
-            <Check className={`h-4 w-4 ${themeColors.accent}`} />
-          ) : testResult ? (
-            <AlertCircle className={`h-4 w-4 ${
-              isTimeout ? 'text-orange-500' : 'text-red-500'
-            }`} />
-          ) : null}
-          <span className="text-sm font-medium">
-            {getStatusText()}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">
-            {loadingState.type === 'test' ? `${timeElapsed}s / 30s` : 
-             testResult ? `Completed in ${timeElapsed}s` : ""}
-          </span>
-          {loadingState.canAbort && (
-            <Button
-              onClick={onAbort}
-              variant="destructive"
-              size="sm"
-              className="h-7 px-3"
-            >
-              Abort
-            </Button>
-          )}
-        </div>
-      </div>
-      {(loadingState.type || testResult) && (
-        <Progress 
-          value={progress} 
-          className={`h-2 ${isTimeout ? 'bg-orange-100' : ''}`} 
-        />
-      )}
-      {testResult?.error && (
-        <div className={`text-sm ${
-          isTimeout ? 'text-orange-500' : 'text-red-500'
-        }`}>
-          {getErrorText()}
-        </div>
-      )}
-    </div>
-  )
-
-  // Add this helper function at the top of the component
-  const formatLatencyResponse = (response: any) => {
-    if (!response?.rawResponse?.latencyDetails) return response?.content;
-    
-    const details = response.rawResponse.latencyDetails;
-    const successRate = ((details.successfulTests / details.totalTests) * 100).toFixed(1);
-    
-    return (
-      <div className="space-y-4">
-        {/* Summary Section */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-lg font-medium">Success Rate: {successRate}%</div>
-            <div className="text-sm text-gray-500">
-              ({details.successfulTests}/{details.totalTests} requests successful)
-            </div>
-          </div>
-          {details.failedTests > 0 && (
-            <div className="text-red-500">
-              {details.failedTests} Failed Requests
-            </div>
-          )}
-        </div>
-
-        {/* Latency Statistics */}
-        {details.successfulTests > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Average', value: details.average },
-              { label: 'Median', value: details.median },
-              { label: 'Min', value: details.min },
-              { label: 'Max', value: details.max }
-            ].map(stat => (
-              <div key={stat.label} className="bg-gray-50 p-3 rounded-lg">
-                <div className="text-sm text-gray-500">{stat.label}</div>
-                <div className="text-lg font-medium">{stat.value}ms</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Failed Requests Details */}
-        {details.failedTests > 0 && (
-          <div className="mt-4">
-            <div className="text-sm font-medium mb-2">Failed Requests:</div>
-            <div className="space-y-2">
-              {details.failures.map((failure: any) => (
-                <div key={failure.index} className="text-sm text-red-600 bg-red-50 p-2 rounded">
-                  Request {failure.index + 1}: {failure.error}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Successful Requests Details */}
-        {details.successfulTests > 0 && (
-          <div className="mt-4">
-            <div className="text-sm font-medium mb-2">Successful Requests:</div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {details.samples.map((sample: any) => (
-                <div key={sample.index} className="text-sm bg-green-50 p-2 rounded">
-                  Request {sample.index + 1}: {sample.latency}ms
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  function formatTemperatureResponse(response: any) {
-    if (!response?.rawResponse?.temperatureDetails) {
-      return response?.content;
-    }
-
-    const details = response.rawResponse.temperatureDetails;
-
-    return {
-      title: '温度一致性测试结果',
-      sections: [
-        {
-          title: '测试概况',
-          items: [
-            { label: '温度置', value: details.temperature },
-            { label: '总测试次数', value: details.totalTests },
-            { label: '成功测试', value: details.successfulTests },
-            { label: '失败测试', value: details.failedTests },
-            { label: '独特响应数', value: details.uniqueResponses },
-            { label: '一致性比率', value: details.consistencyRate },
-            { label: '平均响应时间', value: details.averageResponseTime }
-          ]
-        },
-        details.samples?.length > 0 ? {
-          title: '测试样本',
-          items: details.samples.map((sample: any) => ({
-            label: `测试 ${sample.index}`,
-            value: `${sample.content} (${sample.time})`
-          }))
-        } : null,
-        details.failures?.length > 0 ? {
-          title: '失败记录',
-          items: details.failures.map((failure: any) => ({
-            label: `测试 ${failure.index}`,
-            value: failure.error
-          }))
-        } : null
-      ].filter(Boolean)
+interface RawResponseProps {
+  response: {
+    content: string;
+    type: string;
+    timestamp: string;
+    model: string;
+    raw?: any;
+    details?: {
+      phases?: {
+        functionCall?: FunctionCall;
+        localExecution?: {
+          result: any;
+          timestamp: string;
+        };
+        finalResponse?: {
+          content: string;
+          timestamp: string;
+        };
+      };
+      note?: string;
     };
-  }
+  };
+}
 
-  // Add this helper function near the top of the component
-  function renderTemperatureResponse(response: any) {
-    if (!response?.title || !response?.sections) {
-      return JSON.stringify(response);
-    }
+export const RawResponse: FC<RawResponseProps> = ({ response }) => {
+  return (
+    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+      <pre className="text-sm text-gray-800 whitespace-pre-wrap">
+        {JSON.stringify(response.raw, null, 2)}
+      </pre>
+    </div>
+  );
+};
 
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">{response.title}</h3>
-        {response.sections.map((section: any, index: number) => (
-          section && (
-            <div key={index} className="space-y-2">
-              <h4 className="font-medium">{section.title}</h4>
-              <div className="space-y-1">
-                {section.items.map((item: any, itemIndex: number) => (
-                  <div key={itemIndex} className="flex justify-between">
-                    <span className="text-gray-600">{item.label}:</span>
-                    <span>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        ))}
-      </div>
-    );
-  }
+interface ModelStreamProps {
+  modelId: string;
+  content: string;
+  isTyping: boolean;
+  chunksCount: number;
+}
 
-  function formatMathResponse(response: any) {
-    const details = response?.rawResponse?.mathDetails;
-    const testResults = response?.rawResponse?.testResults;
-    
-    // 如果有批量测试结果，优先��示批量测试结果
-    if (testResults) {
-      return (
-        <div className="space-y-6">
-          {/* 总体统计 */}
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { label: 'Total Tests', value: testResults.totalTests },
-              { label: 'Successful', value: testResults.successfulTests },
-              { label: 'Accuracy', value: `${testResults.accuracy.toFixed(1)}%` },
-              { label: 'Avg Time', value: `${(testResults.averageTime / 1000).toFixed(2)}s` }
-            ].map(stat => (
-              <div key={stat.label} className="bg-gray-50 p-3 rounded-lg">
-                <div className="text-sm text-gray-500">{stat.label}</div>
-                <div className="text-lg font-medium">{stat.value}</div>
-              </div>
-            ))}
-          </div>
+const ModelStreamSection: FC<ModelStreamProps> = ({ modelId, content, isTyping, chunksCount }) => {
+  const { theme } = useTestStore();
+  const [cursorVisible, setCursorVisible] = useState(true);
+  const cursorBlinkRate = 530;
 
-          {/* 详细测试结果 */}
-          <div className="space-y-4">
-            {testResults.results.map((result: any, index: number) => (
-              <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                result.success ? 'border-l-green-500 bg-green-50' : 'border-l-red-500 bg-red-50'
-              }`}>
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h4 className="font-medium">{result.name}</h4>
-                    <p className="text-sm text-gray-600">{result.description}</p>
-                  </div>
-                  <span className={`px-2 py-1 rounded text-sm ${
-                    result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
-                    {result.success ? 'Pass' : 'Fail'}
-                  </span>
-                </div>
-                
-                {result.functionCallDetails && (
-                  <div className="mt-2 space-y-2 text-sm">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-gray-600">Expected Type:</span>
-                        <span className="ml-2">{result.functionCallDetails.expectedType}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Actual Type:</span>
-                        <span className="ml-2">{result.functionCallDetails.actualType}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Expected Result:</span>
-                        <span className="ml-2">{result.functionCallDetails.expectedResult}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Actual Result:</span>
-                        <span className="ml-2">{result.functionCallDetails.actualResult}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="mt-2 text-sm text-gray-500">
-                  Time: {(result.timeTaken / 1000).toFixed(2)}s
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
+  // Handle cursor blinking
+  useEffect(() => {
+    if (!isTyping) return;
 
-    // 如果只有单次测试结果，显示单次测试结果
-    if (details) {
-      return (
-        <div className="space-y-4">
-          {/* 原有的单次测试结果展示逻辑 */}
-        </div>
-      );
-    }
+    const intervalId = setInterval(() => {
+      setCursorVisible(prev => !prev);
+    }, cursorBlinkRate);
 
-    return response?.content;
-  }
-
-  // Update the reasoning result rendering section
-  function formatReasoningResponse(response: any) {
-    const reasoningResponse = response?.rawResponse as ReasoningResponse;
-    
-    if (!reasoningResponse) {
-      return response?.content;
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-medium">Model Answer:</h3>
-          <p className="mt-2">{reasoningResponse.modelAnswer}</p>
-        </div>
-        
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="font-medium">Reference Answer:</h3>
-          <p className="mt-2">{reasoningResponse.referenceAnswer}</p>
-        </div>
-
-        {reasoningResponse.metadata && (
-          <div className="bg-white p-4 rounded-lg shadow">
-            <h3 className="font-medium">Analysis:</h3>
-            <div className="mt-2 space-y-2">
-              <p><span className="font-medium">Category:</span> {reasoningResponse.metadata.category}</p>
-              <p><span className="font-medium">Difficulty:</span> {reasoningResponse.metadata.difficulty}</p>
-              <p><span className="font-medium">Expected Concepts:</span> {reasoningResponse.metadata.expectedConcepts.join(", ")}</p>
-              {reasoningResponse.metadata.score !== undefined && (
-                <p><span className="font-medium">Score:</span> {reasoningResponse.metadata.score}/100</p>
-              )}
-              {reasoningResponse.metadata.feedback && (
-                <div>
-                  <span className="font-medium">Feedback:</span>
-                  <p className="mt-1 text-gray-600">{reasoningResponse.metadata.feedback}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+    return () => clearInterval(intervalId);
+  }, [isTyping]);
 
   return (
-    <Card className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${themeColors.border}`}>
-      <CardHeader className="flex-none pb-4">
-        <CardTitle className="text-xl font-semibold text-gray-800">
-          Results
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 overflow-hidden">
-        {/* Add scrollable container with custom scrollbar */}
-        <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-violet-200/50 scrollbar-track-transparent pr-2">
-          <div className="space-y-6">
-            <ProgressIndicator />
-            {testResult && (
-              <div className="space-y-6">
-                {/* Result Card */}
-                <Card className={`border-none shadow-md rounded-2xl overflow-hidden ${
-                  testResult.success 
-                    ? `bg-gradient-to-r ${themeColors.background} border ${themeColors.border}` 
-                    : "bg-gradient-to-r from-rose-50/80 to-red-50/80 border border-rose-100/30"
-                }`}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center space-x-2">
-                      {testResult.success ? (
-                        <Check className={`h-5 w-5 ${themeColors.accent}`} />
-                      ) : (
-                        <AlertCircle className={`h-5 w-5 ${
-                          isTimeout ? 'text-orange-500' : 'text-red-500'
-                        }`} />
-                      )}
-                      <CardTitle className="text-lg">
-                        {testResult.success ? "Test Successful" : 
-                         isTimeout ? "Test Timed Out" :
-                         testResult.response?.rawResponse?.warning ? "Test Warning" : 
-                         "Test Failed"}
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {testResult.success || testResult.response?.rawResponse?.warning ? (
-                      <div className="space-y-3">
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <h4 className="font-medium mb-2">Response:</h4>
-                          {isStreaming ? (
-                            <div className="relative">
-                              <p className="text-gray-700 whitespace-pre-wrap">
-                                {streamContent}
-                                <span className="animate-pulse">▋</span>
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="text-gray-700 whitespace-pre-wrap">
-                              {testType === 'latency' ? (
-                                formatLatencyResponse(testResult.response)
-                              ) : testType === 'temperature' ? (
-                                renderTemperatureResponse(formatTemperatureResponse(testResult.response))
-                              ) : testType === 'math' ? (
-                                formatMathResponse(testResult.response)
-                              ) : testType === 'reasoning' ? (
-                                formatReasoningResponse(testResult.response)
-                              ) : (
-                                <p>{testResult.response?.content}</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
+    <div className={`p-4 bg-white rounded-lg shadow ${colorThemes[theme].border}`}>
+      <div className="flex justify-between items-center mb-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-medium text-gray-900">
+            Streaming Response
+          </h3>
+          <Badge variant="outline" className="text-xs">
+            {modelId}
+          </Badge>
+        </div>
+        <Badge variant="secondary" className="text-xs">
+          {chunksCount} chunks
+        </Badge>
+      </div>
+      <div className="prose max-w-none">
+        <div className="font-mono whitespace-pre-wrap relative">
+          {content}
+          {isTyping && (
+            <span 
+              className={`absolute inline-block w-2 h-4 ml-0.5 -mb-0.5 bg-gray-800 ${
+                cursorVisible ? 'opacity-100' : 'opacity-0'
+              }`}
+              style={{ transition: 'opacity 0.2s' }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
-                        {/* Function Call Details */}
-                        {testResult.success && testResult.response?.functionCall && (
-                          <div className="mt-4 space-y-3">
-                            <div className="p-4 bg-gray-100 rounded-lg">
-                              <h4 className="font-medium mb-2">Function Call Details:</h4>
-                              <div className="space-y-2">
-                                <p>
-                                  <span className="font-medium">Function:</span> {testResult.response.functionCall.name}
-                                </p>
-                                <div>
-                                  <p className="font-medium">Arguments:</p>
-                                  <pre className="mt-1 p-2 bg-gray-50 rounded text-sm">
-                                    {JSON.stringify(testResult.response.functionCall.arguments, null, 2)}
-                                  </pre>
-                                </div>
-                                <div>
-                                  <p className="font-medium">Result:</p>
-                                  <pre className="mt-1 p-2 bg-gray-50 rounded text-sm">
-                                    {JSON.stringify(testResult.response.functionCall.result, null, 2)}
-                                  </pre>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-red-600">{testResult.error}</p>
-                    )}
-                  </CardContent>
-                </Card>
+const StreamSection: FC = () => {
+  const { streamingState, selectedModels } = useTestStore();
+  const [modelStreams, setModelStreams] = useState<Record<string, {
+    content: string;
+    isTyping: boolean;
+    chunksCount: number;
+  }>>({});
 
-                {/* Raw Response Section */}
-                <div className={`bg-white/60 backdrop-blur-sm rounded-2xl border ${themeColors.border}`}>
-                  <button
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className={`w-full px-6 py-4 flex items-center justify-between ${themeColors.button} rounded-xl transition-all duration-200`}
-                  >
-                    <span className="flex items-center text-sm font-medium">
-                      <ChevronDown
-                        className={`h-4 w-4 mr-2 transition-transform duration-200 ${
-                          isExpanded ? "transform rotate-180" : ""
-                        }`}
-                      />
-                      View Raw Response
+  // Initialize model streams
+  useEffect(() => {
+    if (streamingState.isStreaming) {
+      const initialStreams = selectedModels.reduce((acc, modelId) => ({
+        ...acc,
+        [modelId]: {
+          content: '',
+          isTyping: true,
+          chunksCount: 0
+        }
+      }), {});
+      setModelStreams(initialStreams);
+    }
+  }, [streamingState.isStreaming, selectedModels]);
+
+  // Update content for current model
+  useEffect(() => {
+    if (streamingState.content && streamingState.currentModel) {
+      setModelStreams(prev => ({
+        ...prev,
+        [streamingState.currentModel as string]: {
+          content: streamingState.content,
+          isTyping: streamingState.isTyping,
+          chunksCount: streamingState.chunks.length
+        }
+      }));
+    }
+  }, [streamingState.content, streamingState.currentModel, streamingState.isTyping, streamingState.chunks]);
+
+  if (!streamingState.isStreaming) return null;
+
+  return (
+    <div className="space-y-4">
+      {Object.entries(modelStreams).map(([modelId, stream]) => (
+        <ModelStreamSection
+          key={modelId}
+          modelId={modelId}
+          content={stream.content}
+          isTyping={stream.isTyping}
+          chunksCount={stream.chunksCount}
+        />
+      ))}
+    </div>
+  );
+};
+
+const MultiModelResults: FC = () => {
+  const { multiModelResults, theme } = useTestStore();
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  
+  if (Object.keys(multiModelResults).length === 0) return null;
+
+  const handleAccordionChange = (value: string[]) => {
+    setExpandedItems(value);
+  };
+
+  return (
+    <div className={`p-4 bg-white rounded-lg shadow ${colorThemes[theme].border}`}>
+      <h3 className="text-lg font-medium text-gray-900 mb-4">
+        Multi-Model Test Results
+      </h3>
+      <Accordion 
+        type="multiple" 
+        className="space-y-2"
+        value={expandedItems}
+        onValueChange={handleAccordionChange}
+      >
+        {Object.entries(multiModelResults).map(([modelId, { result, timeElapsed, status }]) => (
+          <AccordionItem key={modelId} value={modelId}>
+            <AccordionTrigger className="hover:no-underline">
+              <div className="flex justify-between items-center w-full pr-4">
+                <h4 className="font-medium">{modelId}</h4>
+                <div className="flex items-center gap-2">
+                  <Badge variant={status === 'completed' ? 'secondary' : 'outline'}>
+                    {status}
+                  </Badge>
+                  {timeElapsed && (
+                    <span className="text-sm text-gray-600">
+                      {(timeElapsed / 1000).toFixed(2)}s
                     </span>
-                  </button>
-
-                  {isExpanded && (
-                    <div className="px-6 pb-6">
-                      <pre className={`p-4 bg-gradient-to-br ${themeColors.background} backdrop-blur-sm rounded-xl ring-1 ${themeColors.border} text-sm overflow-auto max-h-96`}>
-                        {testType === 'stream' 
-                          ? testResult.response?.rawResponse?.chunks?.join('\n')
-                          : JSON.stringify(testResult.response?.rawResponse ?? testResult.response, null, 2)
-                        }
-                      </pre>
-                    </div>
                   )}
                 </div>
               </div>
-            )}
+            </AccordionTrigger>
+            <AccordionContent>
+              {result && <TestResultContent result={result} />}
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </div>
+  );
+};
+
+const LoadingSpinner: FC = () => {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 space-y-4">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <p className="text-gray-600 font-medium">Running test...</p>
+    </div>
+  );
+};
+
+// Add new status display components
+interface StatusDisplayProps {
+  type: 'success' | 'warning' | 'info' | 'error';
+  title: string;
+  message: string | React.ReactNode;
+}
+
+const StatusDisplay: FC<StatusDisplayProps> = ({ type, title, message }) => {
+  const styles = {
+    success: {
+      bg: 'bg-green-50',
+      border: 'border-green-200',
+      icon: 'text-green-400',
+      title: 'text-green-800',
+      message: 'text-green-700'
+    },
+    warning: {
+      bg: 'bg-yellow-50',
+      border: 'border-yellow-200',
+      icon: 'text-yellow-400',
+      title: 'text-yellow-800',
+      message: 'text-yellow-700'
+    },
+    info: {
+      bg: 'bg-blue-50',
+      border: 'border-blue-200',
+      icon: 'text-blue-400',
+      title: 'text-blue-800',
+      message: 'text-blue-700'
+    },
+    error: {
+      bg: 'bg-red-50',
+      border: 'border-red-200',
+      icon: 'text-red-400',
+      title: 'text-red-800',
+      message: 'text-red-700'
+    }
+  }[type];
+
+  const icons = {
+    success: (
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    ),
+    warning: (
+      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+    ),
+    info: (
+      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+    ),
+    error: (
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+    )
+  }[type];
+
+  return (
+    <div className={`p-4 ${styles.bg} border ${styles.border} rounded-lg`}>
+      <div className="flex items-start">
+        <div className="flex-shrink-0">
+          <svg className={`h-5 w-5 ${styles.icon}`} viewBox="0 0 20 20" fill="currentColor">
+            {icons}
+          </svg>
+        </div>
+        <div className="ml-3">
+          <h3 className={`text-sm font-medium ${styles.title}`}>
+            {title}
+          </h3>
+          <div className={`mt-1 text-sm ${styles.message}`}>
+            {message}
           </div>
         </div>
-      </CardContent>
-    </Card>
-  )
-}
+      </div>
+    </div>
+  );
+};
+
+// Replace the existing ErrorDisplay with StatusDisplay
+const ErrorDisplay: FC<{ error: string }> = ({ error }) => (
+  <StatusDisplay type="error" title="Test Error" message={error} />
+);
+
+// Add a helper function to format content
+const formatContent = (content: string): React.ReactNode => {
+  // Split by numbered list items (1. 2. 3. etc)
+  const sections = content.split(/(\d+\.\s)/);
+  
+  return (
+    <div className="space-y-2">
+      {sections.map((section, index) => {
+        // If it's a number prefix (1. 2. 3. etc)
+        if (/^\d+\.\s$/.test(section)) {
+          return (
+            <div key={index} className="flex items-baseline">
+              <span className="font-medium mr-2">{section}</span>
+              {/* The next item in sections array is the content */}
+              <span className="flex-1">{sections[index + 1]}</span>
+            </div>
+          );
+        }
+        // Skip the content sections as they're handled above
+        return null;
+      }).filter(Boolean)}
+    </div>
+  );
+};
+
+// 添加一个新的组件来展示延迟测试详情
+const LatencyTestDetails: FC<{ details: any }> = ({ details }) => {
+  return (
+    <div className="space-y-4">
+      {/* 总体统计 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Total Tests</dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.totalTests}</dd>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Successful</dt>
+          <dd className="mt-1 text-lg font-semibold text-green-600">{details.successfulTests}</dd>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Failed</dt>
+          <dd className="mt-1 text-lg font-semibold text-red-600">{details.failedTests}</dd>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Success Rate</dt>
+          <dd className="mt-1 text-lg font-semibold text-blue-600">
+            {((details.successfulTests / details.totalTests) * 100).toFixed(1)}%
+          </dd>
+        </div>
+      </div>
+
+      {/* 延迟统计 */}
+      <div className="bg-white p-4 rounded-lg border">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">Latency Statistics</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <dt className="text-sm font-medium text-gray-500">Average</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.average}ms</dd>
+          </div>
+          <div>
+            <dt className="text-sm font-medium text-gray-500">Median</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.median}ms</dd>
+          </div>
+          <div>
+            <dt className="text-sm font-medium text-gray-500">Min</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.min}ms</dd>
+          </div>
+          <div>
+            <dt className="text-sm font-medium text-gray-500">Max</dt>
+            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.max}ms</dd>
+          </div>
+        </div>
+      </div>
+
+      {/* 样本详情 - 使用手风组件 */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="sample-details">
+          <AccordionTrigger>
+            <div className="flex justify-between items-center w-full">
+              <span>Sample Details</span>
+              <span className="text-sm text-gray-500">
+                {details.samples.length} samples, {details.failures?.length || 0} failures
+              </span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="overflow-x-auto mt-2">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Test #
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Latency
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {details.samples.map((sample: any, index: number) => (
+                    <tr key={index}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {sample.index + 1}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {sample.latency}ms
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Success
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {details.failures?.map((failure: any) => (
+                    <tr key={`failure-${failure.index}`}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {failure.index + 1}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500" colSpan={2}>
+                        Failed: {failure.error}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </div>
+  );
+};
+
+// 添加温度测试详情组件
+const TemperatureTestDetails: FC<{ details: any }> = ({ details }) => {
+  return (
+    <div className="space-y-4">
+      {/* 总体统计 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Temperature</dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.temperature}</dd>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Total Tests</dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.totalTests}</dd>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Successful Tests</dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.successfulTests}</dd>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <dt className="text-sm font-medium text-gray-500">Consistency Rate</dt>
+          <dd className="mt-1 text-lg font-semibold text-blue-600">{details.consistencyRate}</dd>
+        </div>
+      </div>
+
+      {/* 响应详情 */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="response-details">
+          <AccordionTrigger>
+            <div className="flex justify-between items-center w-full">
+              <span>Response Details</span>
+              <span className="text-sm text-gray-500">
+                {details.testResults.length} responses
+              </span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="overflow-x-auto mt-2">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Test #
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Response
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Duration
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {details.testResults.map((result: { 
+                    testNumber: string;
+                    response: string;
+                    duration: string;
+                  }, index: number) => (
+                    <tr key={index}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {result.testNumber}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {result.response}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {result.duration}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* 统计信息 */}
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <h4 className="text-sm font-medium text-gray-900 mb-3">Statistics</h4>
+        <dl className="grid grid-cols-2 gap-4">
+          {Object.entries(details.statistics).map(([key, value]) => (
+            <div key={key}>
+              <dt className="text-sm font-medium text-gray-500">
+                {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900">
+                {String(value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+  );
+};
+
+// 在 MultiModelResults 组件中修改结果展示部分
+const TestResultContent: FC<{ result: TestResult }> = ({ result }) => {
+  if (!result.response) return null;
+
+  return (
+    <div className="space-y-4">
+      {/* 状态显示 - 使用 formatContent */}
+      <StatusDisplay
+        type={result.status === TestStatus.SUCCESS ? 'success' : 
+              result.status === TestStatus.WARNING ? 'warning' : 
+              result.status === TestStatus.INFO ? 'info' : 'error'}
+        title={`Test ${result.status}`}
+        message={formatContent(result.response.content)}
+      />
+
+      {/* 延迟测试详情 */}
+      {result.response?.raw?.latencyDetails && (
+        <div className="mt-4">
+          <h4 className="text-md font-medium text-gray-900 mb-2">Latency Test Details</h4>
+          <LatencyTestDetails details={result.response.raw.latencyDetails} />
+        </div>
+      )}
+
+      {/* 指标数据 */}
+      {result.response?.raw?.metrics && (
+        <div className="mt-4">
+          <h4 className="text-md font-medium text-gray-900 mb-2">Metrics</h4>
+          <dl className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+            {Object.entries(result.response.raw.metrics).map(([key, value]) => (
+              <div key={key}>
+                <dt className="text-sm font-medium text-gray-500">{key}</dt>
+                <dd className="mt-1 text-lg text-gray-900">{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {/* Raw Response Accordion */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="raw-response">
+          <AccordionTrigger>Raw Response</AccordionTrigger>
+          <AccordionContent>
+            <pre className="text-sm bg-gray-50 p-4 rounded-lg overflow-x-auto">
+              {JSON.stringify(result.response.raw, null, 2)}
+            </pre>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* 温度测试详情 */}
+      {result.response?.type === 'temperature' && result.response.raw?.temperatureDetails && (
+        <div className="mt-4">
+          <h4 className="text-md font-medium text-gray-900 mb-2">Temperature Test Details</h4>
+          <TemperatureTestDetails details={result.response.raw.temperatureDetails} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const ResultsSection = () => {
+  const {
+    testResult,
+    loadingState,
+    theme,
+    multiModelResults,
+    streamingState,
+    resetTestResults,
+    error
+  } = useTestStore()
+
+  // Helper function to check if we have any final results to display
+  const hasResults = () => {
+    return testResult?.response || Object.keys(multiModelResults).length > 0;
+  }
+
+  // Helper function to check if we have any errors to display
+  const hasErrors = () => {
+    return error || testResult?.error || Object.values(multiModelResults).some(result => result.status === 'error');
+  }
+
+  return (
+    <div className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${colorThemes[theme].border}`}>
+      <div className="flex-none p-4 border-b flex justify-between items-center">
+        <h3 className="text-xl font-semibold text-gray-800">
+          Results
+        </h3>
+        {(hasResults() || hasErrors()) && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => resetTestResults()}
+          >
+            Clear Results
+          </Button>
+        )}
+      </div>
+      
+      <div className="flex-grow overflow-y-auto p-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300/50 hover:scrollbar-thumb-gray-300/70">
+        {/* Always render StreamSection if streaming */}
+        {streamingState.isStreaming && (
+          <div className="mb-4">
+            <StreamSection />
+          </div>
+        )}
+
+        {/* Show loading, errors, or results */}
+        {loadingState.type === 'test' && !streamingState.isStreaming ? (
+          <div className={`p-4 bg-gray-50 rounded-lg ${colorThemes[theme].border}`}>
+            <LoadingSpinner />
+          </div>
+        ) : hasErrors() ? (
+          <div className="space-y-4">
+            {/* Show global error if exists */}
+            {error && <ErrorDisplay error={error} />}
+            
+            {/* Show test result error if exists */}
+            {testResult?.error && <ErrorDisplay error={testResult.error} />}
+            
+            {/* Show multi-model errors if exist */}
+            {Object.entries(multiModelResults)
+              .filter(([_, result]) => result.status === 'error')
+              .map(([modelId, result]) => (
+                <div key={modelId} className="space-y-2">
+                  <h4 className="font-medium text-red-800">{modelId}</h4>
+                  <ErrorDisplay error={result.result.error || 'Unknown error'} />
+                </div>
+              ))}
+          </div>
+        ) : hasResults() ? (
+          <div className="space-y-4">
+            {/* Show multi-model results if available */}
+            {Object.keys(multiModelResults).length > 0 && <MultiModelResults />}
+            
+            {/* Show single test result if available */}
+            {testResult?.response && (
+              <div className={`p-4 bg-white rounded-lg shadow ${colorThemes[theme].border}`}>
+                {/* 状态显示 - 使用 formatContent */}
+                <StatusDisplay
+                  type={testResult.status === TestStatus.SUCCESS ? 'success' : 
+                        testResult.status === TestStatus.WARNING ? 'warning' : 
+                        testResult.status === TestStatus.INFO ? 'info' : 'error'}
+                  title={`Test ${testResult.status}`}
+                  message={formatContent(testResult.response.content)}
+                />
+
+                {/* 测试详情 - 根据测试类型显示不同内容 */}
+                {testResult.response.type === 'latency' && testResult.response.raw?.latencyDetails && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-gray-900 mb-2">Latency Test Details</h4>
+                    <LatencyTestDetails details={testResult.response.raw.latencyDetails} />
+                  </div>
+                )}
+
+                {/* 通用指标数据 */}
+                {testResult.response.raw?.metrics && (
+                  <div className="mt-4">
+                    <h4 className="text-md font-medium text-gray-900 mb-2">Metrics</h4>
+                    <dl className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                      {Object.entries(testResult.response.raw.metrics).map(([key, value]) => (
+                        <div key={key}>
+                          <dt className="text-sm font-medium text-gray-500">{key}</dt>
+                          <dd className="mt-1 text-lg text-gray-900">{String(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+
+                {/* Raw Response */}
+                <Accordion type="single" collapsible className="mt-4">
+                  <AccordionItem value="raw-response">
+                    <AccordionTrigger>Raw Response</AccordionTrigger>
+                    <AccordionContent>
+                      <pre className="text-sm bg-gray-50 p-4 rounded-lg overflow-x-auto">
+                        {JSON.stringify(testResult.response.raw, null, 2)}
+                      </pre>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            )}
+          </div>
+        ) : !streamingState.isStreaming && (
+          <div className={`p-4 bg-gray-50 rounded-lg ${colorThemes[theme].border}`}>
+            <p className="text-gray-600 text-center">No test results yet. Run a test to see results here.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

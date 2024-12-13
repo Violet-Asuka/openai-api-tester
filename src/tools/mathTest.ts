@@ -1,4 +1,4 @@
-import { TestResult } from "@/types/apiTypes"
+import { TestResult, TestStatus } from "@/types/apiTypes"
 
 const TEST_EXPRESSIONS = [
   { expression: "2 + 2", type: "basic" },
@@ -92,21 +92,33 @@ export async function testMath(
 
     const successRate = toolUsageResults.filter(r => r.toolUsed).length / TEST_EXPRESSIONS.length * 100
 
+    // Create a properly formatted TestResult
     return {
       success: true,
+      status: TestStatus.SUCCESS,
       response: {
         content: `Math test completed with ${successRate}% tool usage success rate`,
-        rawResponse: results[0],
-        functionCall: {
-          name: 'calculate_math',
-          arguments: toolUsageResults,
-          result: successRate
+        type: 'math',
+        timestamp: new Date().toISOString(),
+        model: model,
+        raw: {
+          results: results,  // Store all raw results
+          toolUsageResults: toolUsageResults
+        },
+        metrics: {
+          successRate: `${successRate}%`,
+          totalTests: TEST_EXPRESSIONS.length,
+          successfulTests: toolUsageResults.filter(r => r.toolUsed).length
+        },
+        details: {
+          expressions: toolUsageResults
         }
       }
     }
   } catch (error: any) {
     return {
       success: false,
+      status: TestStatus.ERROR,
       error: error.message
     }
   }

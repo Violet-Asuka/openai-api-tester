@@ -1,4 +1,4 @@
-import { TestResult } from "@/types/apiTypes"
+import { TestResult, TestStatus } from "@/types/apiTypes"
 
 export async function testConnection(
   baseUrl: string, 
@@ -29,9 +29,13 @@ export async function testConnection(
     
     return {
       success: true,
+      status: TestStatus.SUCCESS,
       response: {
         content: 'Connection successful',
-        rawResponse: data
+        type: 'connection',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: data
       }
     }
   } catch (error: any) {
@@ -40,6 +44,7 @@ export async function testConnection(
     }
     return {
       success: false,
+      status: TestStatus.ERROR,
       error: error.message || 'Connection test failed'
     }
   }

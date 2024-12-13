@@ -69,7 +69,9 @@ export async function testImage(
         },
         { 
           type: 'image_url', 
-          image_url: base64Image 
+          image_url: {
+            url: base64Image  // Wrap base64Image in an object with url property
+          }
         }
       ]
     }];

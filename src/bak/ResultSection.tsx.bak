@@ -1,0 +1,971 @@
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { AlertCircle, Check, Timer, Loader2 } from "lucide-react"
+import { TestResult, TestType, LoadingState } from "@/types/apiTypes"
+import { useState, useEffect, useRef } from "react"
+import { Progress } from "@/components/ui/progress"
+import { ColorTheme, ThemeColors } from '@/types/theme'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
+
+interface ResultsSectionProps {
+  testResult: TestResult | null;
+  isStreaming: boolean;
+  streamContent: string;
+  testType: TestType;
+  loadingState: LoadingState;
+  onAbort: () => void;
+  timeElapsed: number;
+  setTimeElapsed: (time: number | ((prev: number) => number)) => void;
+  theme: ColorTheme;
+  themeColors: ThemeColors;
+  multiModelResults: MultiModelTestResult;
+  streamingState: StreamingState;
+  setStreamingState: React.Dispatch<React.SetStateAction<StreamingState>>;
+  firstChunkTime: number | null;
+  setFirstChunkTime: (time: number | null) => void;
+}
+
+// Add type for reasoning test response
+interface ReasoningResponse {
+  modelAnswer: string;
+  referenceAnswer: string;
+  metadata: {
+    category: string;
+    difficulty: string;
+    expectedConcepts: string[];
+    score?: number;
+    feedback?: string;
+  };
+}
+
+// Add new interface for multi-model test results
+interface MultiModelTestResult {
+  [modelId: string]: {
+    result: TestResult;
+    timeElapsed: number;
+  };
+}
+
+// Add these new interfaces
+interface StreamingState {
+  isTyping: boolean;
+  currentContent: string;
+  showCursor: boolean;
+  chunks: string[];
+}
+
+// Add after existing interfaces
+interface StatusIconProps {
+  loadingState: LoadingState;
+  isStreaming: boolean;
+  testResult: TestResult | null;
+  themeColors: ThemeColors;
+}
+
+interface ProgressIndicatorProps extends StatusIconProps {
+  timeElapsed: number;
+  onAbort: () => void;
+  firstChunkTime: number | null;
+}
+
+interface TimeDisplayProps {
+  loadingState: LoadingState;
+  timeElapsed: number;
+  onAbort: () => void;
+}
+
+interface Sample {
+  index: number;
+  latency: string;
+}
+
+interface Failure {
+  index: number;
+  error: string;
+}
+
+// Add new components for better organization
+const TestSummaryCard = ({ label, value, unit = '' }: { label: string, value: string | number, unit?: string }) => (
+  <div className="bg-white/50 backdrop-blur p-4 rounded-lg shadow-sm">
+    <div className="text-2xl font-bold">
+      {value}
+      {unit && <span className="text-lg ml-1 text-gray-500">{unit}</span>}
+    </div>
+    <div className="text-sm text-gray-600">{label}</div>
+  </div>
+);
+
+// Add new component for latency metrics
+const LatencyMetrics = ({ metrics }: { metrics: any }) => (
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    {[
+      { label: 'Average', value: metrics.average },
+      { label: 'Median', value: metrics.median },
+      { label: 'Min', value: metrics.min },
+      { label: 'Max', value: metrics.max }
+    ].map(metric => (
+      <TestSummaryCard 
+        key={metric.label}
+        label={metric.label}
+        value={metric.value}
+        unit="ms"
+      />
+    ))}
+  </div>
+);
+
+export function ResultsSection({
+  testResult,
+  isStreaming,
+  streamContent,
+  testType,
+  loadingState,
+  onAbort,
+  timeElapsed,
+  setTimeElapsed,
+  themeColors,
+  multiModelResults,
+  streamingState,
+  setStreamingState,
+  firstChunkTime,
+}: ResultsSectionProps) {
+  const [progress, setProgress] = useState(0)
+  const TIMEOUT_DURATION = 30
+  const hasReset = useRef(false)
+  
+  // 计算超时状态
+  const isTimeout = timeElapsed >= TIMEOUT_DURATION
+
+  const cursorIntervalRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Timer effect
+  useEffect(() => {
+    let timeInterval: NodeJS.Timeout;
+    
+    if (loadingState.type === 'test') {
+      timeInterval = setInterval(() => {
+        setTimeElapsed(prev => {
+          const newTime = prev + 1
+          if (newTime >= TIMEOUT_DURATION) {
+            clearInterval(timeInterval)
+            onAbort()
+          }
+          return newTime
+        })
+      }, 1000)
+    }
+
+    return () => {
+      clearInterval(timeInterval)
+    }
+  }, [loadingState.type, onAbort, TIMEOUT_DURATION])
+
+  // Progress bar effect
+  useEffect(() => {
+    let progressInterval: NodeJS.Timeout;
+    
+    if (loadingState.type === 'test') {
+      setProgress(0)
+      
+      progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (isStreaming) {
+            return Math.min(prev + 2, 75)
+          } else {
+            return Math.min(prev + (prev < 80 ? 1.5 : 0.5), 95)
+          }
+        })
+      }, 200)
+    } else {
+      setProgress(100)
+      hasReset.current = false
+    }
+
+    return () => {
+      clearInterval(progressInterval)
+    }
+  }, [loadingState.type, isStreaming, setStreamingState])
+
+  // Handle cursor blinking
+  useEffect(() => {
+    if (isStreaming) {
+      cursorIntervalRef.current = setInterval(() => {
+        setStreamingState(prev => ({
+          ...prev,
+          showCursor: !prev.showCursor
+        }));
+      }, 500);
+    }
+
+    return () => {
+      if (cursorIntervalRef.current) {
+        clearInterval(cursorIntervalRef.current);
+      }
+    };
+  }, [isStreaming, setStreamingState]);
+
+  // Handle content updates
+  useEffect(() => {
+    if (isStreaming && streamContent !== streamingState.currentContent) {
+      // Clear any existing typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Add character one by one with random delay
+      const nextChar = streamContent.slice(streamingState.currentContent.length, streamContent.length);
+      if (nextChar) {
+        typingTimeoutRef.current = setTimeout(() => {
+          setStreamingState(prev => ({
+            ...prev,
+            currentContent: streamContent,
+            isTyping: true
+          }));
+        }, Math.random() * 30 + 20); // Random delay between 20-50ms
+      }
+    }
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, [isStreaming, streamContent, setStreamingState]);
+
+  const getStatusText = (
+    loadingState: LoadingState, 
+    testResult: TestResult | null
+  ) => {
+    if (loadingState.type === 'models') return "Loading models..."
+    if (loadingState.type === 'test') return `Testing ${testType}...`
+    if (!testResult) return "Ready"
+    if (isTimeout) return "Test Timed Out"
+    if (testResult.error?.includes('aborted by user')) return "Test Aborted"
+    return testResult.success ? "Test Complete" : "Test Failed"
+  }
+
+  const getErrorText = (testResult: TestResult | null, isTimeout: boolean) => {
+    if (!testResult?.error) return null
+    if (isTimeout) {
+      return "Request timed out after 30 seconds"
+    }
+    if (testResult.error?.includes('aborted by user')) {
+      return "Test aborted by user"
+    }
+    return testResult.error
+  }
+
+  // Update the formatLatencyResponse function to use LatencyMetrics component
+  const formatLatencyResponse = (response: any) => {
+    if (!response?.rawResponse?.latencyDetails) return response?.content;
+    
+    const details = response.rawResponse.latencyDetails;
+    const samples = details.samples || [];
+    const failures = details.failures || [];
+    
+    return (
+      <div className="space-y-6">
+        {/* Top Summary Cards */}
+        <div className="grid grid-cols-3 gap-4">
+          <TestSummaryCard 
+            label="Total Tests"
+            value={details.totalTests}
+          />
+          <TestSummaryCard 
+            label="Successful"
+            value={details.successfulTests}
+          />
+          <TestSummaryCard 
+            label="Success Rate"
+            value={`${((details.successfulTests / details.totalTests) * 100).toFixed(0)}%`}
+          />
+        </div>
+
+        {/* Latency Metrics */}
+        <LatencyMetrics metrics={{
+          average: details.average,
+          median: details.median,
+          min: details.min,
+          max: details.max
+        }} />
+
+        {/* Test Details */}
+        {samples.length > 0 && (
+          <div className="bg-white/50 backdrop-blur p-6 rounded-lg">
+            <h3 className="text-lg font-medium mb-4">Test Details</h3>
+            <div className="grid gap-3">
+              {samples.map((sample: Sample, index: number) => (
+                <div 
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                      <Check className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Test #{sample.index + 1}</div>
+                      <div className="text-sm text-gray-500">Latency: {sample.latency}ms</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Failed Tests */}
+        {failures.length > 0 && (
+          <div className="bg-white/50 backdrop-blur p-6 rounded-lg">
+            <h3 className="text-lg font-medium mb-4 text-red-600">Failed Tests</h3>
+            <div className="grid gap-3">
+              {failures.map((failure: Failure, index: number) => (
+                <div 
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-red-50 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                      <AlertCircle className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Test #{failure.index + 1}</div>
+                      <div className="text-sm text-red-600">{failure.error}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  function formatTemperatureResponse(response: any) {
+    if (!response?.rawResponse?.temperatureDetails) {
+      return response?.content;
+    }
+
+    const details = response.rawResponse.temperatureDetails;
+
+    return {
+      title: '温度一致性测试结果',
+      sections: [
+        {
+          title: '测试概况',
+          items: [
+            { label: '温度', value: details.temperature },
+            { label: '总测试次数', value: details.totalTests },
+            { label: '成功测试', value: details.successfulTests },
+            { label: '失败测试', value: details.failedTests },
+            { label: '独特响应数', value: details.uniqueResponses },
+            { label: '一致性比率', value: details.consistencyRate },
+            { label: '平均响应时间', value: details.averageResponseTime }
+          ]
+        },
+        details.samples?.length > 0 ? {
+          title: '测试样本',
+          items: details.samples.map((sample: any) => ({
+            label: `测试 ${sample.index}`,
+            value: `${sample.content} (${sample.time})`
+          }))
+        } : null,
+        details.failures?.length > 0 ? {
+          title: '失败记录',
+          items: details.failures.map((failure: any) => ({
+            label: `测试 ${failure.index}`,
+            value: failure.error
+          }))
+        } : null
+      ].filter(Boolean)
+    };
+  }
+
+  // Add this helper function near the top of the component
+  function renderTemperatureResponse(response: any) {
+    if (!response?.title || !response?.sections) {
+      return JSON.stringify(response);
+    }
+
+    return (
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">{response.title}</h3>
+        {response.sections.map((section: any, index: number) => (
+          section && (
+            <div key={index} className="space-y-2">
+              <h4 className="font-medium">{section.title}</h4>
+              <div className="space-y-1">
+                {section.items.map((item: any, itemIndex: number) => (
+                  <div key={itemIndex} className="flex justify-between">
+                    <span className="text-gray-600">{item.label}:</span>
+                    <span>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        ))}
+      </div>
+    );
+  }
+
+  function formatMathResponse(response: any) {
+    const details = response?.rawResponse?.mathDetails;
+    const testResults = response?.rawResponse?.testResults;
+    
+    // 如果有批量测试结果，先示量测试结果
+    if (testResults) {
+      return (
+        <div className="space-y-6">
+          {/* 总体统计 */}
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { label: 'Total Tests', value: testResults.totalTests },
+              { label: 'Successful', value: testResults.successfulTests },
+              { label: 'Accuracy', value: `${testResults.accuracy.toFixed(1)}%` },
+              { label: 'Avg Time', value: `${(testResults.averageTime / 1000).toFixed(2)}s` }
+            ].map(stat => (
+              <div key={stat.label} className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-sm text-gray-500">{stat.label}</div>
+                <div className="text-lg font-medium">{stat.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 详测试结果 */}
+          <div className="space-y-4">
+            {testResults.results.map((result: any, index: number) => (
+              <div key={index} className={`p-4 rounded-lg border-l-4 ${
+                result.success ? 'border-l-green-500 bg-green-50' : 'border-l-red-500 bg-red-50'
+              }`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 className="font-medium">{result.name}</h4>
+                    <p className="text-sm text-gray-600">{result.description}</p>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-sm ${
+                    result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {result.success ? 'Pass' : 'Fail'}
+                  </span>
+                </div>
+                
+                {result.functionCallDetails && (
+                  <div className="mt-2 space-y-2 text-sm">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-gray-600">Expected Type:</span>
+                        <span className="ml-2">{result.functionCallDetails.expectedType}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Actual Type:</span>
+                        <span className="ml-2">{result.functionCallDetails.actualType}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Expected Result:</span>
+                        <span className="ml-2">{result.functionCallDetails.expectedResult}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Actual Result:</span>
+                        <span className="ml-2">{result.functionCallDetails.actualResult}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="mt-2 text-sm text-gray-500">
+                  Time: {(result.timeTaken / 1000).toFixed(2)}s
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // 果只有单次测试结果，显示单次测试结果
+    if (details) {
+      return (
+        <div className="space-y-4">
+          {/* 原有的单次测试结果展示逻辑 */}
+        </div>
+      );
+    }
+
+    return response?.content;
+  }
+
+  // Update the reasoning result rendering section
+  function formatReasoningResponse(response: any) {
+    const reasoningResponse = response?.rawResponse as ReasoningResponse;
+    
+    if (!reasoningResponse) {
+      return response?.content;
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="font-medium">Model Answer:</h3>
+          <p className="mt-2">{reasoningResponse.modelAnswer}</p>
+        </div>
+        
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="font-medium">Reference Answer:</h3>
+          <p className="mt-2">{reasoningResponse.referenceAnswer}</p>
+        </div>
+
+        {reasoningResponse.metadata && (
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="font-medium">Analysis:</h3>
+            <div className="mt-2 space-y-2">
+              <p><span className="font-medium">Category:</span> {reasoningResponse.metadata.category}</p>
+              <p><span className="font-medium">Difficulty:</span> {reasoningResponse.metadata.difficulty}</p>
+              <p><span className="font-medium">Expected Concepts:</span> {reasoningResponse.metadata.expectedConcepts.join(", ")}</p>
+              {reasoningResponse.metadata.score !== undefined && (
+                <p><span className="font-medium">Score:</span> {reasoningResponse.metadata.score}/100</p>
+              )}
+              {reasoningResponse.metadata.feedback && (
+                <div>
+                  <span className="font-medium">Feedback:</span>
+                  <p className="mt-1 text-gray-600">{reasoningResponse.metadata.feedback}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Add summary statistics
+  const getSummaryStats = () => {
+    const totalTests = Object.keys(multiModelResults).length;
+    const successfulTests = Object.values(multiModelResults)
+      .filter(r => r.result.success).length;
+    const avgTime = Object.values(multiModelResults)
+      .reduce((acc, curr) => acc + curr.timeElapsed, 0) / totalTests;
+    
+    return { totalTests, successfulTests, avgTime };
+  };
+
+  // Add new function to format response based on test type
+  const getFormattedResponse = (response: any) => {
+    if (!response) return null;
+    
+    // 如果是流式响应，直接显示内容
+    if (response?.type === 'stream') {
+      return (
+        <div className="font-mono whitespace-pre-wrap">
+          {response.content}
+        </div>
+      );
+    }
+
+    // 根据测试类型选择不同的格式化输出
+    switch (testType) {
+      case 'latency':
+        return formatLatencyResponse(response);
+      case 'temperature':
+        return renderTemperatureResponse(formatTemperatureResponse(response));
+      case 'math':
+        return formatMathResponse(response);
+      case 'reasoning':
+        return formatReasoningResponse(response);
+      case 'stream':
+        return (
+          <div className="font-mono whitespace-pre-wrap bg-white p-4 rounded-lg">
+            {/* 添加首次响应时间显示 */}
+            {firstChunkTime && (
+              <div className="text-sm text-blue-500 font-medium mb-2">
+                First response: {firstChunkTime.toFixed(1)}ms
+              </div>
+            )}
+            {/* 内容显示 */}
+            {streamContent}
+            {/* 打字光标 */}
+            {isStreaming && (
+              <span className="inline-block w-2 h-4 ml-1 bg-gray-500 animate-pulse"/>
+            )}
+          </div>
+        );
+      default:
+        return response.content || JSON.stringify(response, null, 2);
+    }
+  };
+
+  // Add this CSS to your global styles or as a style tag
+  const streamingStyles = `
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+  `;
+
+  const getStreamingResponse = () => (
+    <div className="font-mono relative space-y-4">
+      {/* 实时内容 */}
+      <div className="whitespace-pre-wrap">
+        {streamingState.currentContent}
+        {streamingState.showCursor && (
+          <span 
+            className="inline-block w-2 h-4 ml-1 bg-gray-500"
+            style={{ animation: 'blink 1s step-end infinite' }}
+          />
+        )}
+      </div>
+      
+      {/* 原始 chunks */}
+      <div className="mt-4 space-y-2">
+        <h4 className="font-medium text-sm text-gray-600">Raw Chunks:</h4>
+        <div className="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto">
+          {streamingState.chunks.map((chunk, index) => (
+            <div key={index} className="font-mono">
+              {chunk}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* 打字指示器 */}
+      {isStreaming && streamingState.isTyping && (
+        <div className="absolute top-0 right-0 bg-gray-100 px-2 py-1 rounded text-xs text-gray-500">
+          streaming...
+        </div>
+      )}
+    </div>
+  );
+
+  // Add new component for raw response section
+  const RawResponseSection = ({
+    testResult,
+    multiModelResults,
+  }: {
+    testResult: TestResult | null;
+    multiModelResults: MultiModelTestResult;
+  }) => {
+    return (
+      <div className="space-y-4">
+        <h3 className="font-medium text-lg">Raw Response</h3>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <Accordion type="single" collapsible className="w-full">
+            {/* For streaming response */}
+            {isStreaming && (
+              <AccordionItem value="streaming">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex justify-between w-full">
+                    <span className="font-medium">Streaming Response</span>
+                    <span className="text-sm text-blue-500">Active</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  {getStreamingResponse()}
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
+            {/* For multi-model results */}
+            {Object.entries(multiModelResults).map(([modelId, { result }]) => (
+              <AccordionItem key={modelId} value={modelId}>
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex justify-between w-full">
+                    <span className="font-medium">{modelId}</span>
+                    <span className={`text-sm ${result.success ? "text-green-500" : "text-red-500"}`}>
+                      {result.success ? "Success" : "Failed"}
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <pre className="overflow-x-auto text-sm bg-gray-50 p-4 rounded-lg mt-2">
+                    {JSON.stringify(result.response, null, 2)}
+                  </pre>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+
+            {/* For single test result */}
+            {testResult && Object.keys(multiModelResults).length === 0 && !isStreaming && (
+              <AccordionItem value="single">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex justify-between w-full">
+                    <span className="font-medium">Test Result</span>
+                    <span className={`text-sm ${testResult.success ? "text-green-500" : "text-red-500"}`}>
+                      {testResult.success ? "Success" : "Failed"}
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <pre className="overflow-x-auto text-sm bg-gray-50 p-4 rounded-lg mt-2">
+                    {JSON.stringify(testResult.response, null, 2)}
+                  </pre>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+          </Accordion>
+        </div>
+      </div>
+    );
+  };
+
+  // Add new components for status icons and time display
+  const StatusIcon = ({ loadingState, isStreaming, testResult, themeColors }: StatusIconProps) => {
+    if (loadingState.type) {
+      return isStreaming ? (
+        <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+      ) : (
+        <Timer className="h-5 w-5 animate-pulse text-blue-500" />
+      );
+    }
+    
+    if (!testResult) return null;
+    
+    return testResult.success ? (
+      <Check className={`h-5 w-5 ${themeColors.accent}`} />
+    ) : (
+      <AlertCircle className={`h-5 w-5 ${
+        isTimeout ? 'text-orange-500' : 'text-red-500'
+      }`} />
+    );
+  };
+
+  // Update the ProgressIndicator component
+  const ProgressIndicator = ({
+    loadingState,
+    isStreaming,
+    testResult,
+    timeElapsed,
+    onAbort,
+    firstChunkTime,
+    themeColors
+  }: ProgressIndicatorProps) => (
+    <div className="bg-white/50 backdrop-blur p-4 rounded-lg shadow-sm space-y-3">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <StatusIcon 
+            loadingState={loadingState}
+            isStreaming={isStreaming}
+            testResult={testResult}
+            themeColors={themeColors}
+          />
+          <div className="space-y-1">
+            <div className="font-medium">
+              {getStatusText(loadingState, testResult)}
+            </div>
+            {firstChunkTime && (
+              <div className="text-sm text-blue-500">
+                First response: {firstChunkTime.toFixed(1)}ms
+              </div>
+            )}
+          </div>
+        </div>
+        <TimeDisplay 
+          loadingState={loadingState}
+          timeElapsed={timeElapsed}
+          onAbort={onAbort}
+        />
+      </div>
+      
+      <Progress 
+        value={progress} 
+        className={`h-2 ${
+          isTimeout ? 'bg-orange-100' : ''
+        }`}
+      />
+      
+      {testResult?.error && (
+        <ErrorMessage error={getErrorText(testResult, isTimeout)} />
+      )}
+    </div>
+  );
+
+  const ErrorMessage = ({ error }: { error: string | null }) => (
+    error ? (
+      <div className={`text-sm ${
+        isTimeout ? 'text-orange-500' : 'text-red-500'
+      }`}>
+        {error}
+      </div>
+    ) : null
+  );
+
+  const TimeDisplay = ({ loadingState, timeElapsed, onAbort }: TimeDisplayProps) => (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-500">
+        {loadingState.type === 'test' ? `${timeElapsed}s / 30s` : 
+         testResult ? `Completed in ${timeElapsed}s` : ""}
+      </span>
+      {loadingState.canAbort && (
+        <Button
+          onClick={onAbort}
+          variant="destructive"
+          size="sm"
+          className="h-7 px-3"
+        >
+          Abort
+        </Button>
+      )}
+    </div>
+  );
+
+  return (
+    <Card className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${themeColors.border}`}>
+      <style>{streamingStyles}</style>
+      <CardHeader className="flex-none pb-4">
+        <CardTitle className="text-xl font-semibold text-gray-800">
+          Test Results
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 overflow-y-auto space-y-6">
+        {/* Progress Indicator */}
+        <ProgressIndicator 
+          loadingState={loadingState}
+          isStreaming={isStreaming}
+          testResult={testResult}
+          timeElapsed={timeElapsed}
+          onAbort={onAbort}
+          firstChunkTime={firstChunkTime}
+          themeColors={themeColors}
+        />
+
+        {/* Formatted Results */}
+        {(testResult || isStreaming || Object.keys(multiModelResults).length > 0) && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium text-lg">Formatted Results</h3>
+              {/* 添加首次响应时间显示 */}
+              {firstChunkTime && testType === 'stream' && (
+                <div className="text-sm text-blue-500 font-medium">
+                  First response: {firstChunkTime.toFixed(1)}ms
+                </div>
+              )}
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow space-y-4">
+              {/* Multi-model Results Summary */}
+              {Object.keys(multiModelResults).length > 0 && (
+                <div className="space-y-4">
+                  {/* Summary Statistics */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 bg-white/50 backdrop-blur rounded-lg">
+                      <div className="text-gray-600">Total Tests</div>
+                      <div className="font-bold text-xl">{getSummaryStats().totalTests}</div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4 bg-white/50 backdrop-blur rounded-lg">
+                      <div className="text-gray-600">Successful Tests</div>
+                      <div className="font-bold text-xl text-green-600">
+                        {getSummaryStats().successfulTests}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4 bg-white/50 backdrop-blur rounded-lg">
+                      <div className="text-gray-600">Average Response Time</div>
+                      <div className="font-bold text-xl text-blue-600">
+                        {getSummaryStats().avgTime.toFixed(0)}
+                        <span className="text-sm ml-1 text-gray-500">ms</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-4 bg-white/50 backdrop-blur rounded-lg">
+                      <div className="text-gray-600">Success Rate</div>
+                      <div className="font-bold text-xl text-blue-600">
+                        {((getSummaryStats().successfulTests / getSummaryStats().totalTests) * 100).toFixed(1)}
+                        <span className="text-sm ml-1 text-gray-500">%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Individual Model Results */}
+                  <Accordion type="single" collapsible defaultValue="" className="w-full">
+                    {Object.entries(multiModelResults).map(([modelId, { result, timeElapsed }]) => (
+                      <AccordionItem key={modelId} value={modelId}>
+                        <AccordionTrigger>
+                          <div className="flex justify-between w-full">
+                            <span>{modelId}</span>
+                            <span className={result.success ? "text-green-500" : "text-red-500"}>
+                              {result.success ? "Success" : "Failed"}
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-4">
+                            <div>Time: {timeElapsed.toFixed(0)}ms</div>
+                            {result.error && (
+                              <div className="text-red-500">{result.error}</div>
+                            )}
+                            
+                            {/* Formatted Response */}
+                            {result.response && (
+                              <div className="bg-white/50 backdrop-blur p-6 rounded-lg space-y-4">
+                                <h4 className="text-lg font-medium text-gray-700">Formatted Output</h4>
+                                
+                                <div className="space-y-3">
+                                  {/* 如果是对象或数组类型的响应，遍历显示 */}
+                                  {typeof result.response === 'object' ? (
+                                    Object.entries(result.response).map(([key, value]) => (
+                                      <div 
+                                        key={key}
+                                        className="flex flex-col space-y-2 p-4 bg-white rounded-lg shadow-sm"
+                                      >
+                                        <div className="text-sm font-medium text-gray-500">
+                                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </div>
+                                        <div className="font-mono text-gray-800">
+                                          {typeof value === 'object' 
+                                            ? JSON.stringify(value, null, 2)
+                                            : String(value)
+                                          }
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    // 如果是字符串类型的响应，直接显示
+                                    <div className="p-4 bg-white rounded-lg shadow-sm">
+                                      <pre className="whitespace-pre-wrap font-mono text-gray-800">
+                                        {String(result.response)}
+                                      </pre>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              )}
+
+              {/* Single Test Result */}
+              {(testResult?.success || isStreaming) && !Object.keys(multiModelResults).length && (
+                <div className="bg-white p-4 rounded-lg">
+                  {isStreaming ? (
+                    // 流式响应只显示内容，不显示原始数据
+                    <div className="font-mono whitespace-pre-wrap">
+                      {streamContent}
+                      {isStreaming && (
+                        <span className="inline-block w-2 h-4 ml-1 bg-gray-500 animate-pulse"/>
+                      )}
+                    </div>
+                  ) : (
+                    getFormattedResponse(testResult?.response)
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Raw Response Section */}
+        {(testResult || Object.keys(multiModelResults).length > 0) && (
+          <RawResponseSection 
+            testResult={testResult}
+            multiModelResults={multiModelResults}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}

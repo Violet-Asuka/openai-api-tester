@@ -1,4 +1,4 @@
-import { TestResult } from "@/types/apiTypes"
+import { TestResult, TestStatus } from "@/types/apiTypes"
 
 export async function testLatency(
   baseUrl: string,
@@ -7,7 +7,7 @@ export async function testLatency(
   signal?: AbortSignal
 ): Promise<TestResult> {
   try {
-    const iterations = 10;
+    const iterations = 30;
     const SINGLE_REQUEST_TIMEOUT = 30000; // 30 seconds per request
     
     // Create array of test promises
@@ -92,11 +92,27 @@ Max Latency: ${maxLatency.toFixed(0)}ms` : ''}
 ${failedTests.length ? `\nFailed Request Details:
 ${failedTests.map(f => `Request ${f.index + 1}: ${f.error}`).join('\n')}` : ''}`;
 
+    const successRate = (successfulTests.length / iterations) * 100
+
+    // Determine status based on success rate
+    let status = TestStatus.ERROR
+    if (successRate === 100) {
+      status = TestStatus.SUCCESS
+    } else if (successRate >= 80) {
+      status = TestStatus.INFO
+    } else if (successRate >= 60) {
+      status = TestStatus.WARNING
+    }
+
     return {
       success: successfulTests.length > 0,
+      status,
       response: {
         content: summaryText,
-        rawResponse: {
+        type: 'latency',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: {
           latencyDetails: {
             totalTests: iterations,
             successfulTests: successfulTests.length,
@@ -114,6 +130,13 @@ ${failedTests.map(f => `Request ${f.index + 1}: ${f.error}`).join('\n')}` : ''}`
               error: f.error
             }))
           }
+        },
+        metrics: {
+          successRate: successRate.toFixed(1) + '%',
+          avgLatency: avgLatency.toFixed(0) + 'ms',
+          medianLatency: medianLatency.toFixed(0) + 'ms',
+          minLatency: minLatency.toFixed(0) + 'ms',
+          maxLatency: maxLatency.toFixed(0) + 'ms'
         }
       }
     };
@@ -121,11 +144,13 @@ ${failedTests.map(f => `Request ${f.index + 1}: ${f.error}`).join('\n')}` : ''}`
     if (error.name === 'AbortError' && signal?.aborted) {
       return {
         success: false,
+        status: TestStatus.ERROR,
         error: 'Test aborted by user'
       };
     }
     return {
       success: false,
+      status: TestStatus.ERROR,
       error: error.message || 'Latency test failed'
     };
   }

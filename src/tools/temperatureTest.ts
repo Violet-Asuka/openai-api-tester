@@ -1,25 +1,23 @@
-import { TestResult } from "@/types/apiTypes"
+import { TestResult, TestStatus } from "@/types/apiTypes"
 
 export async function testTemperature(
   baseUrl: string,
   apiKey: string,
   model: string,
-  prompt: string,
+  _prompt: string,
   signal?: AbortSignal
 ): Promise<TestResult> {
   try {
+    const SINGLE_REQUEST_TIMEOUT = 30000;
     const FIXED_TEMPERATURE = 0.01;
     const ITERATIONS = 10;
-    const SINGLE_REQUEST_TIMEOUT = 30000;
+    const SYSTEM_PROMPT = "You're an associative thinker. The user gives you a sequence of 6 numbers. Your task is to figure out and provide the 7th number directly, without explaining how you got there.";
+    const USER_INPUT = "5, 15, 77, 19, 53, 54,";
 
     // Create array of test promises
     const testPromises = Array(ITERATIONS).fill(0).map(async (_, index) => {
       const start = performance.now();
-      
-      // Create an AbortController for this specific request
       const requestController = new AbortController();
-      
-      // Setup timeout for this specific request
       const timeoutId = setTimeout(() => {
         requestController.abort();
       }, SINGLE_REQUEST_TIMEOUT);
@@ -34,13 +32,10 @@ export async function testTemperature(
           signal: signal ? signal : requestController.signal,
           body: JSON.stringify({
             model,
-            messages: [{ 
-              role: 'system',
-              content: "You're an associative thinker. The user gives you a sequence of 6 numbers. Your task is to figure out and provide the 7th number directly, without explaining how you got there."
-            }, {
-              role: 'user', 
-              content: prompt || '5, 15, 77, 19, 53, 54,'
-            }],
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: USER_INPUT }
+            ],
             temperature: FIXED_TEMPERATURE
           })
         });
@@ -50,13 +45,19 @@ export async function testTemperature(
         }
 
         const data = await response.json();
-        const content = data.choices[0]?.message?.content || '';
+        const content = data.choices[0]?.message?.content?.trim() || '';
+        
+        // Validate response format - should be a single number
+        if (!content.match(/^-?\d+(\.\d+)?$/)) {
+          throw new Error(`Invalid response format: ${content}`);
+        }
+
         const end = performance.now();
         
         return {
           success: true,
           content,
-          duration: end - start,
+          duration: (end - start) / 1000,
           index
         };
 
@@ -71,112 +72,109 @@ export async function testTemperature(
       }
     });
 
-    // Run all tests concurrently and collect results
     const allResults = await Promise.all(testPromises);
     
-    // Ensure allResults is not undefined and has items
-    if (!allResults?.length) {
+    // Count failed requests
+    const failedTests = allResults.filter(r => !r.success);
+    if (failedTests.length > ITERATIONS * 0.2) { // If more than 20% failed
       return {
         success: false,
-        error: '没有收到任何测试结果'
+        status: TestStatus.ERROR,
+        error: `Too many failed requests (${failedTests.length}/${ITERATIONS})`
       };
     }
 
-    // Separate successful and failed requests with null checks
-    const successfulTests = (allResults.filter(r => r && r.success) || []) as Array<{
+    const successfulTests = allResults.filter(r => r.success) as Array<{
       success: true, 
       content: string, 
       duration: number, 
       index: number
     }>;
-    const failedTests = (allResults.filter(r => r && !r.success) || []) as Array<{
-      success: false, 
-      error: string, 
-      index: number
-    }>;
 
-    // Ensure we have successful tests before calculating metrics
-    if (!successfulTests.length) {
-      return {
-        success: false,
-        error: '所有测试都失败了',
-        response: {
-          content: '一致性测试失败 - 没有成功的测试',
-          rawResponse: {
-            temperatureDetails: {
-              temperature: FIXED_TEMPERATURE,
-              totalTests: ITERATIONS,
-              successfulTests: 0,
-              failedTests: failedTests.length,
-              uniqueResponses: 0,
-              consistencyRate: "0%",
-              averageResponseTime: "0ms",
-              samples: [],
-              failures: failedTests.map(f => ({
-                index: f.index + 1,
-                error: f.error
-              }))
-            }
-          }
-        }
-      };
-    }
-
-    // Calculate consistency metrics with null checks
-    const responses = successfulTests.map(r => r.content || '');
-    const timings = successfulTests.map(r => r.duration || 0);
-    const uniqueResponses = new Set(responses.filter(r => r));
-    const totalTime = timings.reduce((a, b) => a + b, 0);
-    
-    const consistency = ((ITERATIONS - uniqueResponses.size + 1) / ITERATIONS) * 100;
+    // Calculate metrics
+    const responses = successfulTests.map(r => r.content);
+    const uniqueResponses = new Set(responses);
+    const totalTime = successfulTests.reduce((sum, r) => sum + r.duration, 0);
     const avgTime = totalTime / successfulTests.length;
+    const consistency = ((ITERATIONS - uniqueResponses.size + 1) / ITERATIONS) * 100;
 
-    // Evaluate consistency
-    let consistencyRating;
+    // Determine test status based on consistency and response validity
+    let status = TestStatus.ERROR;
+    let statusMessage = '';
+
     if (consistency === 100) {
-      consistencyRating = "完全一致！在低温度设置下输出保持稳定。";
+      status = TestStatus.SUCCESS;
+      statusMessage = 'Perfect consistency achieved';
     } else if (consistency >= 80) {
-      consistencyRating = "较高一致性。输出基本稳定，有少量变化。";
+      status = TestStatus.INFO;
+      statusMessage = 'Good consistency, but some variation present';
+    } else if (consistency >= 60) {
+      status = TestStatus.WARNING;
+      statusMessage = 'Moderate consistency, significant variation detected';
     } else {
-      consistencyRating = "一致性较低。输出不稳定，可能需要检查模型或提示词。";
+      status = TestStatus.ERROR;
+      statusMessage = 'Poor consistency, test failed';
     }
+
+    // Add error details for failed requests
+    const errorDetails = failedTests.length > 0 ? {
+      failedTests: failedTests.map(test => ({
+        index: test.index,
+        error: test.error
+      }))
+    } : {};
 
     return {
-      success: successfulTests.length > 0,
+      success: true,
+      status,
       response: {
-        content: consistencyRating,
-        rawResponse: {
+        content: `Temperature Test Results (${FIXED_TEMPERATURE}):
+• ${statusMessage}
+• Consistency Rate: ${consistency.toFixed(1)}%
+• Unique Responses: ${uniqueResponses.size}/${ITERATIONS}
+• Average Response Time: ${avgTime.toFixed(3)}s
+${failedTests.length > 0 ? `• Failed Requests: ${failedTests.length}/${ITERATIONS}` : ''}`,
+        type: 'temperature',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: {
           temperatureDetails: {
             temperature: FIXED_TEMPERATURE,
             totalTests: ITERATIONS,
             successfulTests: successfulTests.length,
-            failedTests: failedTests.length,
             uniqueResponses: uniqueResponses.size,
-            consistencyRate: consistency.toFixed(1) + "%",
-            averageResponseTime: avgTime.toFixed(0) + "ms",
-            samples: successfulTests.map(r => ({
-              index: r.index + 1,
-              content: r.content,
-              time: r.duration.toFixed(0) + "ms"
+            consistencyRate: `${consistency.toFixed(1)}%`,
+            averageResponseTime: `${avgTime.toFixed(3)}s`,
+            testResults: successfulTests.map(r => ({
+              testNumber: `Test ${r.index + 1}`,
+              response: r.content,
+              duration: `${r.duration.toFixed(3)}s`
             })),
-            failures: failedTests.map(f => ({
-              index: f.index + 1,
-              error: f.error
-            }))
+            statistics: {
+              totalTests: ITERATIONS,
+              uniqueResponses: uniqueResponses.size,
+              consistencyRate: `${consistency.toFixed(1)}%`,
+              avgResponseTime: `${avgTime.toFixed(3)}s`
+            },
+            responses,
+            ...errorDetails
           }
         }
       }
     };
+
   } catch (error: any) {
     if (error.name === 'AbortError' && signal?.aborted) {
       return {
         success: false,
+        status: TestStatus.ABORTED,
         error: 'Test aborted by user'
       };
     }
     return {
       success: false,
-      error: error.message || '温度一致性测试失败'
+      status: TestStatus.ERROR,
+      error: error.message || 'Temperature consistency test failed'
     };
   }
 } 

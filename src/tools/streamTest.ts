@@ -1,9 +1,18 @@
-import { TestResult } from "@/types/apiTypes"
+import { TestResult, TestStatus } from "@/types/apiTypes"
 
-interface StreamCallbacks {
+export interface StreamCallbacks {
   onChunk: (chunk: string) => void
   onContent: (content: string) => void
   onHasContent: (hasContent: boolean) => void
+  onFirstChunk: () => void
+  onRawChunk?: (chunk: string) => void
+}
+
+export interface StreamResponse {
+  content: string;
+  rawResponse: {
+    chunks: string[];
+  };
 }
 
 export async function testStream(
@@ -11,14 +20,17 @@ export async function testStream(
   apiKey: string,
   model: string,
   prompt: string,
-  callbacks: {
-    onChunk: (chunk: string) => void
-    onContent: (content: string) => void
-    onHasContent: (hasContent: boolean) => void
-  },
+  callbacks: StreamCallbacks,
   signal?: AbortSignal
 ): Promise<TestResult> {
+  const chunks: string[] = [];
+  let fullContent = '';
+  let startTime = Date.now();
+
   try {
+    callbacks.onHasContent(true);
+    callbacks.onContent('');
+    
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -30,7 +42,7 @@ export async function testStream(
         model,
         messages: [{ 
           role: 'user', 
-          content: prompt || 'Say hello!'
+          content: prompt || 'Tell me a story about a brave knight!'
         }],
         stream: true
       })
@@ -41,52 +53,92 @@ export async function testStream(
     }
 
     const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    let content = ''
-    const chunks: string[] = []
+    if (!reader) throw new Error('No reader available')
 
-    if (!reader) {
-      throw new Error('No reader available')
-    }
+    const decoder = new TextDecoder()
+    let isFirstChunk = true
 
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) break;
 
       const chunk = decoder.decode(value)
-      chunks.push(chunk)
-      callbacks.onChunk(chunk)
-
-      const lines = chunk.split('\n')
+      const lines = chunk.split('\n').filter(line => line.trim() !== '')
+      
       for (const line of lines) {
-        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+        if (line.startsWith('data: ')) {
+          if (line === 'data: [DONE]') continue;
+          
           try {
             const data = JSON.parse(line.slice(6))
-            const delta = data.choices[0]?.delta?.content || ''
-            content += delta
-            callbacks.onContent(content)
-            if (delta) callbacks.onHasContent(true)
+            const content = data.choices?.[0]?.delta?.content || ''
+            
+            if (content) {
+              if (isFirstChunk) {
+                isFirstChunk = false;
+                callbacks.onFirstChunk();
+              }
+
+              chunks.push(content);
+              fullContent += content;
+              
+              callbacks.onChunk(content);
+              callbacks.onContent(fullContent);
+              if (callbacks.onRawChunk) {
+                callbacks.onRawChunk(line);
+              }
+            }
           } catch (e) {
-            // 忽略解析错误
+            console.error('Error parsing stream chunk:', e);
           }
         }
       }
     }
 
-    return {
+    const endTime = Date.now();
+    
+    return { 
       success: true,
+      status: TestStatus.SUCCESS,
       response: {
-        content,
-        rawResponse: { chunks }
+        content: fullContent,
+        type: 'stream',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: {
+          apiResponse: {
+            chunks,
+            totalChunks: chunks.length,
+            streamDuration: endTime - startTime
+          },
+          metrics: {
+            chunkCount: chunks.length,
+            totalLength: fullContent.length,
+            streamDuration: `${((endTime - startTime) / 1000).toFixed(2)}s`
+          }
+        }
       }
     }
   } catch (error: any) {
+    callbacks.onHasContent(false);
     if (error.name === 'AbortError') {
-      throw error
+      throw error;
     }
     return {
       success: false,
-      error: error.message || 'Stream test failed'
+      status: TestStatus.ERROR,
+      error: error.message || 'Stream test failed',
+      response: {
+        content: fullContent,
+        type: 'stream',
+        timestamp: new Date().toISOString(),
+        model,
+        raw: { 
+          error: error.message,
+          partialContent: fullContent,
+          chunks 
+        }
+      }
     }
   }
 } 
