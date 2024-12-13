@@ -24,6 +24,7 @@ import { Model, TestType } from "@/types/apiTypes"
 import { colorThemes } from "@/types/theme"
 import { getReasoningQuestions } from '@/tools/reasoningTest';
 import { Textarea } from "@/components/ui/textarea"
+import { useI18nStore, translations } from '@/store/i18nStore'
 
 // Keep the Credential interface
 interface Credential {
@@ -124,6 +125,9 @@ export const ConfigSection = () => {
     processModelInput,
   } = useTestStore()
 
+  const { language } = useI18nStore()
+  const t = translations[language]
+
   // Local state
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [showCredentials, setShowCredentials] = useState(false)
@@ -202,7 +206,7 @@ export const ConfigSection = () => {
     const updatedCredentials = [...credentials, newCred];
     setCredentials(updatedCredentials);
     
-    // 使用正确的存储键名保存
+    // 使用正确的存储键名保���
     localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(updatedCredentials));
   };
 
@@ -295,7 +299,8 @@ export const ConfigSection = () => {
     if (baseUrl && apiKey) {
       fetchModels();
     }
-  }, [baseUrl, apiKey]);
+    setChatPrompt(t.config.defaultPrompt);
+  }, [baseUrl, apiKey, language]);
 
   // 修改打开推理测试模态框的处理函数
   const handleOpenReasoningModal = async () => {
@@ -342,7 +347,7 @@ export const ConfigSection = () => {
       <Card className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${colorThemes[theme].border}`}>
         <CardHeader className="flex-none pb-4">
           <CardTitle className="text-xl font-semibold text-gray-800">
-            Configuration
+            {t.config.title}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-grow overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300/50 hover:scrollbar-thumb-gray-300/70">
@@ -351,12 +356,12 @@ export const ConfigSection = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium text-gray-700">
-                  Quick Setup
+                  {t.config.quickSetup}
                 </label>
               </div>
               <div className="space-y-2">
                 <Textarea
-                  placeholder="Paste both URL and API Key here for automatic detection (Press Enter to process, Shift+Enter for new line)"
+                  placeholder={t.config.quickSetupPlaceholder}
                   value={smartInput}
                   onChange={handleSmartInputChange}
                   className={`w-full bg-white/50 min-h-[80px] ${colorThemes[theme].border} focus:border-violet-300 focus:ring-violet-200/50 rounded-xl`}
@@ -376,7 +381,7 @@ export const ConfigSection = () => {
             {/* API Configuration */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Base URL</label>
+                <label className="text-sm font-medium text-gray-700">{t.config.baseUrl}</label>
                 <Input
                   placeholder="https://api.openai.com/v1"
                   value={baseUrl}
@@ -385,7 +390,7 @@ export const ConfigSection = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">API Key</label>
+                <label className="text-sm font-medium text-gray-700">{t.config.apiKey}</label>
                 <Input
                   placeholder="sk-..."
                   value={apiKey}
@@ -403,7 +408,7 @@ export const ConfigSection = () => {
                   onClick={() => setShowCredentials(!showCredentials)}
                   className={colorThemes[theme].button}
                 >
-                  {showCredentials ? 'Hide' : 'Show'} Saved Credentials
+                  {showCredentials ? t.config.hideSavedCredentials : t.config.showSavedCredentials} Saved Credentials
                 </Button>
                 <div className="flex gap-2">
                   <Button
@@ -412,7 +417,7 @@ export const ConfigSection = () => {
                     disabled={!baseUrl || !apiKey}
                     className={colorThemes[theme].button}
                   >
-                    Save Current
+                    {t.config.saveCurrent}
                   </Button>
                   {credentials.length > 0 && (
                     <Button
@@ -463,7 +468,7 @@ export const ConfigSection = () => {
             {/* Model Selection */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Model</label>
+                <label className="text-sm font-medium text-gray-700">{t.config.model}</label>
                 
                 {/* Model List Accordion - 移到这里 */}
                 {modelList.length > 0 && (
@@ -476,7 +481,7 @@ export const ConfigSection = () => {
                   >
                     <AccordionItem value="models">
                       <AccordionTrigger className="text-sm">
-                        Available Models ({modelList.length})
+                        {t.config.availableModels} ({modelList.length})
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300/50 hover:scrollbar-thumb-gray-300/70">
@@ -512,7 +517,7 @@ export const ConfigSection = () => {
                 {/* Model Search Input */}
                 <div className="relative">
                   <Textarea
-                    placeholder="Enter model names (Press Enter to add, Shift+Enter for new line)"
+                    placeholder={t.config.modelInputPlaceholder}
                     value={modelSearchInput}
                     onChange={handleModelInput}
                     className={`w-full bg-white/50 min-h-[80px] ${colorThemes[theme].border} focus:border-violet-300 focus:ring-violet-200/50 rounded-xl`}
@@ -562,18 +567,18 @@ export const ConfigSection = () => {
                 {isLoadingModels ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Loading...
+                    {t.config.loading}
                   </>
                 ) : (
-                  'Refresh Models'
+                  t.config.refreshModels
                 )}
               </Button>
 
               {/* Prompt Input */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Prompt</label>
+                <label className="text-sm font-medium text-gray-700">{t.config.prompt}</label>
                 <Textarea
-                  placeholder="Enter your prompt here (Press Enter to add, Shift+Enter for new line)"
+                  placeholder={t.config.promptPlaceholder}
                   value={chatPrompt}
                   onChange={(e) => setChatPrompt(e.target.value)}
                   className={`w-full bg-white/50 min-h-[80px] ${colorThemes[theme].border} focus:border-violet-300 focus:ring-violet-200/50 rounded-xl`}
@@ -600,7 +605,7 @@ export const ConfigSection = () => {
               {/* Image Upload */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  Image Upload {imageFile && `(${imageFile.name})`}
+                  {t.config.imageUpload} {imageFile && `(${imageFile.name})`}
                 </label>
                 <div className="space-y-2">
                   <Input
@@ -611,7 +616,7 @@ export const ConfigSection = () => {
                   />
                   {!imageFile && (
                     <p className="text-xs text-gray-500">
-                      No image selected. Default image will be used for image tests.
+                      {t.config.noImageSelected}
                     </p>
                   )}
                 </div>
@@ -628,7 +633,7 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'connection' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Connection Test'
+                    t.config.buttons.connectionTest
                   )}
                 </Button>
 
@@ -641,7 +646,7 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'chat' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Chat Test'
+                    t.config.buttons.chatTest
                   )}
                 </Button>
 
@@ -654,7 +659,7 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'stream' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Stream Test'
+                    t.config.buttons.streamTest
                   )}
                 </Button>
 
@@ -667,7 +672,7 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'function' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Function Test'
+                    t.config.buttons.functionTest
                   )}
                 </Button>
 
@@ -680,7 +685,7 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'latency' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Latency Test'
+                    t.config.buttons.latencyTest
                   )}
                 </Button>
 
@@ -693,7 +698,7 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'temperature' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Temperature Test'
+                    t.config.buttons.temperatureTest
                   )}
                 </Button>
 
@@ -706,20 +711,20 @@ export const ConfigSection = () => {
                   {loadingState.type === 'test' && testType === 'math' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Math Test'
+                    t.config.buttons.mathTest
                   )}
                 </Button>
 
                 <Button
                   onClick={handleOpenReasoningModal}
-                  disabled={loadingState.type === 'test'}
+                  disabled={loadingState.type === 'test' && testType === 'reasoning'}
                   variant="outline"
                   className={`w-full bg-white/50 ${colorThemes[theme].button} rounded-xl`}
                 >
                   {loadingState.type === 'test' && testType === 'reasoning' ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Reasoning Test'
+                    t.config.buttons.reasoningTest
                   )}
                 </Button>
 
@@ -729,7 +734,7 @@ export const ConfigSection = () => {
                     variant="destructive"
                     className="col-span-2"
                   >
-                    Abort Test
+                    {t.config.buttons.abortTest}
                   </Button>
                 )}
               </div>

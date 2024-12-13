@@ -8,10 +8,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { Github, Palette, ExternalLink } from "lucide-react"
+import { Github, Palette, ExternalLink, Globe } from "lucide-react"
+import { useI18nStore, translations, Language } from '@/store/i18nStore'
 
 function App() {
   const { theme, setTheme } = useTestStore()
+  const { language, setLanguage } = useI18nStore()
+  const t = translations[language]
 
   return (
     <div className={`h-screen w-screen overflow-hidden bg-gradient-to-br ${colorThemes[theme].background}`}>
@@ -20,15 +23,46 @@ function App() {
         <div className="w-full h-full max-w-7xl mx-auto px-6 flex justify-between items-center">
           <div>
             <h1 className={`text-2xl font-bold bg-gradient-to-r ${colorThemes[theme].header} bg-clip-text text-transparent`}>
-              OpenAI API Tester
+              {t.title}
             </h1>
             <p className="text-sm text-gray-600 font-medium">
-              A simple tool to test and validate your OpenAI API endpoints
+              {t.subtitle}
             </p>
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {/* Language Selector */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" className="w-10 h-10">
+                  <Globe className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-32" align="end">
+                <div className="space-y-1">
+                  {(['en', 'zh-CN', 'zh-TW', 'ja'] as Language[]).map((lang) => (
+                    <div
+                      key={lang}
+                      className={`flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 cursor-pointer ${
+                        language === lang ? 'bg-gray-50' : ''
+                      }`}
+                      onClick={() => setLanguage(lang)}
+                    >
+                      <span className="text-sm">
+                        {{
+                          'en': 'English',
+                          'zh-CN': '简体中文',
+                          'zh-TW': '繁體中文',
+                          'ja': '日本語'
+                        }[lang]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+
             {/* GitHub Button */}
             <Button
               variant="outline"
@@ -37,16 +71,6 @@ function App() {
               onClick={() => window.open('https://github.com/Violet-Asuka/openai-api-tester', '_blank')}
             >
               <Github className="h-5 w-5" />
-            </Button>
-
-            {/* Live Demo Button */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="w-10 h-10"
-              onClick={() => window.open('https://openai-api-tester.vercel.app', '_blank')}
-            >
-              <ExternalLink className="h-5 w-5" />
             </Button>
 
             {/* Theme Selector */}

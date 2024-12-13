@@ -1,6 +1,6 @@
-import { FC, useEffect, useState } from 'react';
+import { FC, Key, useEffect, useState } from 'react';
 import { useTestStore } from '@/store/testStore'
-import { FunctionCall, TestResult, TestStatus } from '@/types/apiTypes'
+import { FunctionCall, TestResult, TestStatus, TestResultResponse } from '@/types/apiTypes'
 import { colorThemes } from '@/types/theme'
 import {
   Accordion,
@@ -366,7 +366,7 @@ const LatencyTestDetails: FC<{ details: any }> = ({ details }) => {
         </div>
       </div>
 
-      {/* 样本详情 - 使用手风组件 */}
+      {/* 样本详情 - ���用手风��件 */}
       <Accordion type="single" collapsible>
         <AccordionItem value="sample-details">
           <AccordionTrigger>
@@ -429,8 +429,10 @@ const LatencyTestDetails: FC<{ details: any }> = ({ details }) => {
   );
 };
 
-// 添加温度测试详情组件
-const TemperatureTestDetails: FC<{ details: any }> = ({ details }) => {
+// 修改 TemperatureTestDetails 组件，使用正确的类型
+const TemperatureTestDetails: FC<{ details: NonNullable<TestResultResponse['raw']>['temperatureDetails'] }> = ({ details }) => {
+  if (!details) return null;
+
   return (
     <div className="space-y-4">
       {/* 总体统计 */}
@@ -444,8 +446,8 @@ const TemperatureTestDetails: FC<{ details: any }> = ({ details }) => {
           <dd className="mt-1 text-lg font-semibold text-gray-900">{details.totalTests}</dd>
         </div>
         <div className="bg-gray-50 p-4 rounded-lg">
-          <dt className="text-sm font-medium text-gray-500">Successful Tests</dt>
-          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.successfulTests}</dd>
+          <dt className="text-sm font-medium text-gray-500">Unique Responses</dt>
+          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.uniqueResponses}</dd>
         </div>
         <div className="bg-gray-50 p-4 rounded-lg">
           <dt className="text-sm font-medium text-gray-500">Consistency Rate</dt>
@@ -481,11 +483,7 @@ const TemperatureTestDetails: FC<{ details: any }> = ({ details }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {details.testResults.map((result: { 
-                    testNumber: string;
-                    response: string;
-                    duration: string;
-                  }, index: number) => (
+                  {details.testResults.map((result: { testNumber: string; response: string; duration: string }, index: Key | null | undefined) => (
                     <tr key={index}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {result.testNumber}
@@ -514,9 +512,7 @@ const TemperatureTestDetails: FC<{ details: any }> = ({ details }) => {
               <dt className="text-sm font-medium text-gray-500">
                 {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
               </dt>
-              <dd className="mt-1 text-sm text-gray-900">
-                {String(value)}
-              </dd>
+              <dd className="mt-1 text-sm text-gray-900">{String(value)}</dd>
             </div>
           ))}
         </dl>
@@ -525,13 +521,55 @@ const TemperatureTestDetails: FC<{ details: any }> = ({ details }) => {
   );
 };
 
-// 在 MultiModelResults 组件中修改结果展示部分
+// 修改 ReasoningComparison 组件
+const ReasoningComparison: FC<{ modelAnswer: string; referenceAnswer: string }> = ({
+  modelAnswer,
+  referenceAnswer
+}) => {
+  const { theme } = useTestStore();
+  
+  return (
+    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Model Answer Card */}
+      <div className={`p-6 bg-white rounded-xl shadow-sm border ${colorThemes[theme].border}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <h4 className="text-lg font-semibold text-gray-900">Model Answer</h4>
+          <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+            AI Response
+          </Badge>
+        </div>
+        <div className="prose max-w-none">
+          <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {modelAnswer}
+          </div>
+        </div>
+      </div>
+      
+      {/* Reference Answer Card */}
+      <div className={`p-6 bg-white rounded-xl shadow-sm border ${colorThemes[theme].border}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <h4 className="text-lg font-semibold text-gray-900">Reference Answer</h4>
+          <Badge variant="secondary" className="bg-green-50 text-green-700">
+            Standard
+          </Badge>
+        </div>
+        <div className="prose max-w-none">
+          <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {referenceAnswer}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 修改 TestResultContent 组件中的条件渲染部分
 const TestResultContent: FC<{ result: TestResult }> = ({ result }) => {
   if (!result.response) return null;
 
   return (
-    <div className="space-y-4">
-      {/* 状态显示 - 使用 formatContent */}
+    <div className="space-y-6">
+      {/* 状态显示 */}
       <StatusDisplay
         type={result.status === TestStatus.SUCCESS ? 'success' : 
               result.status === TestStatus.WARNING ? 'warning' : 
@@ -540,27 +578,46 @@ const TestResultContent: FC<{ result: TestResult }> = ({ result }) => {
         message={formatContent(result.response.content)}
       />
 
-      {/* 延迟测试详情 */}
-      {result.response?.raw?.latencyDetails && (
-        <div className="mt-4">
-          <h4 className="text-md font-medium text-gray-900 mb-2">Latency Test Details</h4>
-          <LatencyTestDetails details={result.response.raw.latencyDetails} />
-        </div>
-      )}
-
-      {/* 指标数据 */}
-      {result.response?.raw?.metrics && (
-        <div className="mt-4">
-          <h4 className="text-md font-medium text-gray-900 mb-2">Metrics</h4>
-          <dl className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
-            {Object.entries(result.response.raw.metrics).map(([key, value]) => (
-              <div key={key}>
-                <dt className="text-sm font-medium text-gray-500">{key}</dt>
-                <dd className="mt-1 text-lg text-gray-900">{String(value)}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
+      {/* 推理测试答案对比 */}
+      {result.response.type === 'reasoning' && 
+       result.response.raw?.modelAnswer && 
+       result.response.raw?.referenceAnswer && (
+        <>
+          <div className="mt-2">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Answer Comparison</h3>
+            <ReasoningComparison
+              modelAnswer={result.response.raw.modelAnswer}
+              referenceAnswer={result.response.raw.referenceAnswer}
+            />
+          </div>
+          
+          {/* 测试元数据 */}
+          {result.response.raw.metadata && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Test Details</h4>
+              <dl className="grid grid-cols-2 gap-4">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Category</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {result.response.raw.metadata.category}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Difficulty</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {result.response.raw.metadata.difficulty}
+                  </dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-sm font-medium text-gray-500">Expected Concepts</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {result.response.raw.metadata.expectedConcepts.join(', ')}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </>
       )}
 
       {/* Raw Response Accordion */}
@@ -576,9 +633,9 @@ const TestResultContent: FC<{ result: TestResult }> = ({ result }) => {
       </Accordion>
 
       {/* 温度测试详情 */}
-      {result.response?.type === 'temperature' && result.response.raw?.temperatureDetails && (
+      {result.response.type === 'temperature' && result.response.raw?.temperatureDetails && (
         <div className="mt-4">
-          <h4 className="text-md font-medium text-gray-900 mb-2">Temperature Test Details</h4>
+          <h4 className="text-lg font-semibold text-gray-900 mb-4">Temperature Test Details</h4>
           <TemperatureTestDetails details={result.response.raw.temperatureDetails} />
         </div>
       )}

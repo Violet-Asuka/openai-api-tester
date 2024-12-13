@@ -18,7 +18,6 @@ export const ThemeSelector = () => {
         <option value="rose">Rose</option>
         <option value="monochrome">Monochrome</option>
         <option value="light">Light</option>
-        <option value="dark">Dark</option>
       </select>
     </div>
   )

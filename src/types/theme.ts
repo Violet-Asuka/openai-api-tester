@@ -1,4 +1,4 @@
-export type ColorTheme = 'ocean' | 'lavender' | 'sunset' | 'forest' | 'rose' | 'monochrome' | 'light' | 'dark';
+export type ColorTheme = 'ocean' | 'lavender' | 'sunset' | 'forest' | 'rose' | 'monochrome' | 'light';
 
 export interface ThemeConfig {
   background: string;
@@ -130,7 +130,7 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
   },
   light: {
     background: 'bg-white/95',
-      header: 'from-slate-950 via-slate-900 to-slate-950',
+    header: 'from-slate-950 via-slate-900 to-slate-950',
     border: 'border-slate-200/60',
     accent: 'text-slate-800',
     button: 'hover:bg-slate-50 text-slate-700 hover:text-slate-900 hover:shadow-sm active:bg-slate-100 transition-all',
@@ -139,24 +139,6 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       secondary: 'text-slate-700',
       muted: 'text-slate-500',
       inverse: 'text-slate-900',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
-    }
-  },
-  dark: {
-    background: 'bg-slate-900/95',
-    header: 'from-slate-50 via-white to-slate-50',
-    border: 'border-slate-700/30',
-    accent: 'text-slate-200',
-    button: 'hover:bg-slate-800 text-slate-300 hover:text-white hover:shadow-md hover:shadow-slate-900/20 active:bg-slate-700 transition-all',
-    text: {
-      primary: 'text-slate-100',
-      secondary: 'text-slate-300',
-      muted: 'text-slate-400',
-      inverse: 'text-white',
       onDark: {
         primary: 'text-white',
         secondary: 'text-slate-200',

@@ -19,6 +19,7 @@ import { testMath } from '@/tools/mathTest'
 import { testReasoning } from '@/tools/reasoningTest'
 import { testImage } from '@/tools/imageTest'
 import { weatherTool } from '@/tools/availableTools'
+import { translations } from '@/store/i18nStore'
 
 const parseSmartInput = (input: string): { baseUrl?: string; apiKey?: string } => {
   const result: { baseUrl?: string; apiKey?: string } = {};
@@ -135,7 +136,7 @@ const initialState = {
   modelList: [],
   selectedModels: [],
   testType: 'connection' as TestType,
-  chatPrompt: '你可以做什么',
+  chatPrompt: translations['en'].config.defaultPrompt,
   imageFile: null,
   selectedQuestionId: '',
   reasoningQuestions: [],
@@ -392,8 +393,15 @@ export const useTestStore = create<TestState>()(
                 break
 
               case 'reasoning':
-                result = await testReasoning(state.baseUrl, state.apiKey, state.selectedModels[0], state.selectedQuestionId, signal)
-                break
+                set({ testType: 'reasoning' });
+                result = await testReasoning(
+                  state.baseUrl,
+                  state.apiKey,
+                  state.selectedModels[0],
+                  state.selectedQuestionId,
+                  signal
+                );
+                break;
 
               case 'image':
                 result = await testImage(

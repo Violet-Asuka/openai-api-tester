@@ -173,15 +173,15 @@ export interface StreamingState {
   currentModel?: string;
 }
 
-interface TestResultResponse {
+export interface TestResultResponse {
   content: string;
   type: string;
   timestamp: string;
   model: string;
   metrics?: Record<string, any>;
   raw?: {
-    modelAnswer?: string;
-    referenceAnswer?: string;
+    modelAnswer: string;
+    referenceAnswer: string;
     metadata?: {
       category: string;
       difficulty: string;
