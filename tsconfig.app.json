@@ -27,7 +27,8 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "esModuleInterop": true
   },
   "include": ["src", "public/api-test-example.tsx"]
 }
