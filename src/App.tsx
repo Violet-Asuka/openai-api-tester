@@ -19,13 +19,13 @@ function App() {
   return (
     <div className={`h-screen w-screen overflow-hidden bg-gradient-to-br ${colorThemes[theme].background}`}>
       {/* Header */}
-      <div className={`w-full h-16 bg-white/70 backdrop-blur-md border-b ${colorThemes[theme].border} sticky top-0 z-10 shadow-sm`}>
+      <div className={`w-full h-16 ${colorThemes[theme].card.background} backdrop-blur-md border-b ${colorThemes[theme].border} sticky top-0 z-10 shadow-sm`}>
         <div className="w-full h-full max-w-7xl mx-auto px-6 flex justify-between items-center">
           <div>
             <h1 className={`text-2xl font-bold bg-gradient-to-r ${colorThemes[theme].header} bg-clip-text text-transparent`}>
               {t.title}
             </h1>
-            <p className="text-sm text-gray-600 font-medium">
+            <p className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>
               {t.subtitle}
             </p>
           </div>

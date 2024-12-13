@@ -71,7 +71,7 @@ const parseSmartInput = (input: string): { baseUrl?: string; apiKey?: string } =
       if (!url.startsWith('http')) {
         url = 'https://' + url;
       }
-      // 处理 /v1 路径
+      // 处�� /v1 路径
       url = url.replace(/\/+$/, ''); // 移除末尾斜杠
       if (!url.endsWith('/v1')) {
         if (url.includes('/v1/')) {
@@ -206,7 +206,7 @@ export const ConfigSection = () => {
     const updatedCredentials = [...credentials, newCred];
     setCredentials(updatedCredentials);
     
-    // 使用正确的存储键名保���
+    // 使用正确的存储键名保存
     localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(updatedCredentials));
   };
 
@@ -344,9 +344,9 @@ export const ConfigSection = () => {
 
   return (
     <>
-      <Card className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${colorThemes[theme].border}`}>
+      <Card className={`h-full flex flex-col ${colorThemes[theme].card.background} backdrop-blur-xl shadow-md rounded-2xl border ${colorThemes[theme].border}`}>
         <CardHeader className="flex-none pb-4">
-          <CardTitle className="text-xl font-semibold text-gray-800">
+          <CardTitle className={`text-xl font-semibold ${colorThemes[theme].text.primary}`}>
             {t.config.title}
           </CardTitle>
         </CardHeader>

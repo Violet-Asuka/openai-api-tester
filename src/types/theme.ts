@@ -1,4 +1,4 @@
-export type ColorTheme = 'ocean' | 'lavender' | 'sunset' | 'forest' | 'rose' | 'monochrome' | 'light';
+export type ColorTheme = 'ocean' | 'lavender' | 'sunset' | 'forest' | 'rose' | 'monochrome' | 'light' | 'dark';
 
 export interface ThemeConfig {
   background: string;
@@ -11,11 +11,10 @@ export interface ThemeConfig {
     secondary: string;
     muted: string;
     inverse: string;
-    onDark: {
-      primary: string;
-      secondary: string;
-      muted: string;
-    };
+  };
+  card: {
+    background: string;
+    border: string;
   };
 }
 
@@ -30,12 +29,11 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-gray-800',
       secondary: 'text-gray-600',
       muted: 'text-gray-500',
-      inverse: 'text-white',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
     }
   },
   lavender: {
@@ -48,12 +46,11 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-gray-800',
       secondary: 'text-gray-600',
       muted: 'text-gray-500',
-      inverse: 'text-white',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
     }
   },
   sunset: {
@@ -66,12 +63,11 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-gray-800',
       secondary: 'text-gray-600',
       muted: 'text-gray-500',
-      inverse: 'text-white',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
     }
   },
   forest: {
@@ -84,12 +80,11 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-gray-800',
       secondary: 'text-gray-600',
       muted: 'text-gray-500',
-      inverse: 'text-white',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
     }
   },
   rose: {
@@ -102,12 +97,11 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-gray-800',
       secondary: 'text-gray-600',
       muted: 'text-gray-500',
-      inverse: 'text-white',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
     }
   },
   monochrome: {
@@ -120,12 +114,11 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-gray-800',
       secondary: 'text-gray-600',
       muted: 'text-gray-500',
-      inverse: 'text-white',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
     }
   },
   light: {
@@ -138,12 +131,28 @@ export const colorThemes: Record<ColorTheme, ThemeConfig> = {
       primary: 'text-slate-900',
       secondary: 'text-slate-700',
       muted: 'text-slate-500',
-      inverse: 'text-slate-900',
-      onDark: {
-        primary: 'text-white',
-        secondary: 'text-slate-200',
-        muted: 'text-slate-300'
-      }
+      inverse: 'text-white'
+    },
+    card: {
+      background: 'bg-white/60',
+      border: 'border-slate-200/60'
+    }
+  },
+  dark: {
+    background: 'bg-slate-950',
+    header: 'from-slate-50 via-slate-100 to-slate-50',
+    border: 'border-slate-800',
+    accent: 'text-slate-100',
+    button: 'hover:bg-slate-800 text-slate-300 hover:text-white hover:shadow-sm active:bg-slate-700 transition-all',
+    text: {
+      primary: 'text-white',
+      secondary: 'text-slate-300',
+      muted: 'text-slate-400',
+      inverse: 'text-slate-900'
+    },
+    card: {
+      background: 'bg-slate-900/60',
+      border: 'border-slate-800/60'
     }
   }
 } as const;

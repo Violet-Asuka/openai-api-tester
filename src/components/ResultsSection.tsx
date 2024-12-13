@@ -155,16 +155,158 @@ const StreamSection: FC = () => {
   );
 };
 
+// Add this new component for displaying multi-model latency test results
+const MultiModelLatencyResults: FC<{ results: Record<string, any> }> = ({ results }) => {
+  const { theme } = useTestStore();
+  
+  return (
+    <div className="space-y-4">
+      {Object.entries(results).map(([modelId, modelResult]) => {
+        const latencyDetails = modelResult.result?.response?.raw?.latencyDetails;
+        if (!latencyDetails) return null;
+
+        return (
+          <div key={modelId} className={`p-4 ${colorThemes[theme].card.background} rounded-lg shadow ${colorThemes[theme].border}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={`text-lg font-medium ${colorThemes[theme].text.primary}`}>
+                {modelId}
+              </h3>
+              <Badge variant="outline">
+                {(modelResult.timeElapsed / 1000).toFixed(2)}s
+              </Badge>
+            </div>
+
+            <div className="space-y-4">
+              {/* Overall Statistics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className={`${colorThemes[theme].card.background} p-4 rounded-lg`}>
+                  <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Total Tests</dt>
+                  <dd className={`mt-1 text-lg font-semibold ${colorThemes[theme].text.primary}`}>{latencyDetails.totalTests}</dd>
+                </div>
+                <div className={`${colorThemes[theme].card.background} p-4 rounded-lg`}>
+                  <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Successful</dt>
+                  <dd className="mt-1 text-lg font-semibold text-green-600">{latencyDetails.successfulTests}</dd>
+                </div>
+                <div className={`${colorThemes[theme].card.background} p-4 rounded-lg`}>
+                  <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Failed</dt>
+                  <dd className="mt-1 text-lg font-semibold text-red-600">{latencyDetails.failedTests}</dd>
+                </div>
+                <div className={`${colorThemes[theme].card.background} p-4 rounded-lg`}>
+                  <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Success Rate</dt>
+                  <dd className="mt-1 text-lg font-semibold text-blue-600">
+                    {((latencyDetails.successfulTests / latencyDetails.totalTests) * 100).toFixed(1)}%
+                  </dd>
+                </div>
+              </div>
+
+              {/* Latency Statistics */}
+              <div className={`${colorThemes[theme].card.background} p-4 rounded-lg border ${colorThemes[theme].border}`}>
+                <h4 className={`text-sm font-medium ${colorThemes[theme].text.primary} mb-3`}>Latency Statistics</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Average</dt>
+                    <dd className={`mt-1 text-lg font-semibold ${colorThemes[theme].text.primary}`}>{latencyDetails.average}ms</dd>
+                  </div>
+                  <div>
+                    <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Median</dt>
+                    <dd className={`mt-1 text-lg font-semibold ${colorThemes[theme].text.primary}`}>{latencyDetails.median}ms</dd>
+                  </div>
+                  <div>
+                    <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Min</dt>
+                    <dd className={`mt-1 text-lg font-semibold ${colorThemes[theme].text.primary}`}>{latencyDetails.min}ms</dd>
+                  </div>
+                  <div>
+                    <dt className={`text-sm font-medium ${colorThemes[theme].text.secondary}`}>Max</dt>
+                    <dd className={`mt-1 text-lg font-semibold ${colorThemes[theme].text.primary}`}>{latencyDetails.max}ms</dd>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sample Details Table */}
+              <Accordion type="single" collapsible>
+                <AccordionItem value="sample-details" className={`${colorThemes[theme].card.background} rounded-lg border ${colorThemes[theme].border}`}>
+                  <AccordionTrigger>
+                    <div className="flex justify-between items-center w-full">
+                      <span className={`${colorThemes[theme].text.secondary} text-sm`}>Sample Details</span>
+                      <span className={`text-sm ${colorThemes[theme].text.secondary}`}>
+                        {latencyDetails.samples.length} samples, {latencyDetails.failures?.length || 0} failures
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="overflow-x-auto mt-2">
+                      <table className={`min-w-full divide-y ${colorThemes[theme].border}`}>
+                        <thead className={`${colorThemes[theme].card.background}`}>
+                          <tr>
+                            <th className={`px-6 py-3 text-left text-xs font-medium ${colorThemes[theme].text.secondary} uppercase tracking-wider`}>
+                              Test #
+                            </th>
+                            <th className={`px-6 py-3 text-left text-xs font-medium ${colorThemes[theme].text.secondary} uppercase tracking-wider`}>
+                              Latency
+                            </th>
+                            <th className={`px-6 py-3 text-left text-xs font-medium ${colorThemes[theme].text.secondary} uppercase tracking-wider`}>
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className={`divide-y ${colorThemes[theme].border} ${colorThemes[theme].card.background}`}>
+                          {latencyDetails.samples.map((sample: any) => (
+                            <tr key={sample.index} className={`${colorThemes[theme].card.background}`}>
+                              <td className={`px-6 py-4 whitespace-nowrap text-sm ${colorThemes[theme].text.primary}`}>
+                                {sample.index + 1}
+                              </td>
+                              <td className={`px-6 py-4 whitespace-nowrap text-sm ${colorThemes[theme].text.primary}`}>
+                                {sample.latency}ms
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                  Success
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                          {latencyDetails.failures?.map((failure: any) => (
+                            <tr key={`failure-${failure.index}`} className={`${colorThemes[theme].card.background}`}>
+                              <td className={`px-6 py-4 whitespace-nowrap text-sm ${colorThemes[theme].text.primary}`}>
+                                {failure.index + 1}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500" colSpan={2}>
+                                Failed: {failure.error}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// Modify the MultiModelResults component to use the new component for latency tests
 const MultiModelResults: FC = () => {
   const { multiModelResults, theme } = useTestStore();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   
   if (Object.keys(multiModelResults).length === 0) return null;
 
+  // Check if this is a latency test by looking at the first result
+  const firstResult = Object.values(multiModelResults)[0]?.result?.response?.type;
+  if (firstResult === 'latency') {
+    return <MultiModelLatencyResults results={multiModelResults} />;
+  }
+
   const handleAccordionChange = (value: string[]) => {
     setExpandedItems(value);
   };
 
+  // Original MultiModelResults rendering for other test types
   return (
     <div className={`p-4 bg-white rounded-lg shadow ${colorThemes[theme].border}`}>
       <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -317,119 +459,7 @@ const formatContent = (content: string): React.ReactNode => {
   );
 };
 
-// 添加一个新的组件来展示延迟测试详情
-const LatencyTestDetails: FC<{ details: any }> = ({ details }) => {
-  return (
-    <div className="space-y-4">
-      {/* 总体统计 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <dt className="text-sm font-medium text-gray-500">Total Tests</dt>
-          <dd className="mt-1 text-lg font-semibold text-gray-900">{details.totalTests}</dd>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <dt className="text-sm font-medium text-gray-500">Successful</dt>
-          <dd className="mt-1 text-lg font-semibold text-green-600">{details.successfulTests}</dd>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <dt className="text-sm font-medium text-gray-500">Failed</dt>
-          <dd className="mt-1 text-lg font-semibold text-red-600">{details.failedTests}</dd>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <dt className="text-sm font-medium text-gray-500">Success Rate</dt>
-          <dd className="mt-1 text-lg font-semibold text-blue-600">
-            {((details.successfulTests / details.totalTests) * 100).toFixed(1)}%
-          </dd>
-        </div>
-      </div>
-
-      {/* 延迟统计 */}
-      <div className="bg-white p-4 rounded-lg border">
-        <h4 className="text-sm font-medium text-gray-900 mb-3">Latency Statistics</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Average</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.average}ms</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Median</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.median}ms</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Min</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.min}ms</dd>
-          </div>
-          <div>
-            <dt className="text-sm font-medium text-gray-500">Max</dt>
-            <dd className="mt-1 text-lg font-semibold text-gray-900">{details.max}ms</dd>
-          </div>
-        </div>
-      </div>
-
-      {/* 样本详情 - ���用手风��件 */}
-      <Accordion type="single" collapsible>
-        <AccordionItem value="sample-details">
-          <AccordionTrigger>
-            <div className="flex justify-between items-center w-full">
-              <span>Sample Details</span>
-              <span className="text-sm text-gray-500">
-                {details.samples.length} samples, {details.failures?.length || 0} failures
-              </span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="overflow-x-auto mt-2">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Test #
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Latency
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {details.samples.map((sample: any, index: number) => (
-                    <tr key={index}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sample.index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {sample.latency}ms
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                          Success
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {details.failures?.map((failure: any) => (
-                    <tr key={`failure-${failure.index}`}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {failure.index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-red-500" colSpan={2}>
-                        Failed: {failure.error}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-    </div>
-  );
-};
-
-// 修改 TemperatureTestDetails 组件，使用正确的类型
+// 修改 TemperatureTestDetails 组件，使用正确类型
 const TemperatureTestDetails: FC<{ details: NonNullable<TestResultResponse['raw']>['temperatureDetails'] }> = ({ details }) => {
   if (!details) return null;
 
@@ -639,6 +669,22 @@ const TestResultContent: FC<{ result: TestResult }> = ({ result }) => {
           <TemperatureTestDetails details={result.response.raw.temperatureDetails} />
         </div>
       )}
+
+      {/* Use MultiModelLatencyResults for latency test results */}
+      {result.response.type === 'latency' && result.response.raw?.latencyDetails && (
+        <div className="mt-4">
+          <h4 className="text-md font-medium text-gray-900 mb-2">Latency Test Details</h4>
+          <MultiModelLatencyResults 
+            results={{
+              [result.response.model]: {
+                result: result,
+                timeElapsed: 0,
+                status: 'completed'
+              }
+            }} 
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -665,9 +711,9 @@ export const ResultsSection = () => {
   }
 
   return (
-    <div className={`h-full flex flex-col bg-white/60 backdrop-blur-xl shadow-md rounded-2xl border ${colorThemes[theme].border}`}>
+    <div className={`h-full flex flex-col ${colorThemes[theme].card.background} backdrop-blur-xl shadow-md rounded-2xl border ${colorThemes[theme].border}`}>
       <div className="flex-none p-4 border-b flex justify-between items-center">
-        <h3 className="text-xl font-semibold text-gray-800">
+        <h3 className={`text-xl font-semibold ${colorThemes[theme].text.primary}`}>
           Results
         </h3>
         {(hasResults() || hasErrors()) && (
@@ -730,10 +776,18 @@ export const ResultsSection = () => {
                 />
 
                 {/* 测试详情 - 根据测试类型显示不同内容 */}
-                {testResult.response.type === 'latency' && testResult.response.raw?.latencyDetails && (
+                { testResult.response.type === 'latency' && testResult.response.raw?.latencyDetails && (
                   <div className="mt-4">
                     <h4 className="text-md font-medium text-gray-900 mb-2">Latency Test Details</h4>
-                    <LatencyTestDetails details={testResult.response.raw.latencyDetails} />
+                    <MultiModelLatencyResults 
+                      results={{
+                        [testResult.response.model]: {
+                          result: testResult,
+                          timeElapsed: 0,
+                          status: 'completed'
+                        }
+                      }} 
+                    />
                   </div>
                 )}
 
