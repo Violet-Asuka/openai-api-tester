@@ -58,6 +58,7 @@ A modern, intuitive web application for testing and validating OpenAI API endpoi
 - **Build Tool**: Vite
 - **Icons**: Lucide React
 - **Testing**: JSON5 for test cases
+- **Deployment**: Docker & Nginx
 
 ## 🚀 Getting Started
 
@@ -65,9 +66,11 @@ A modern, intuitive web application for testing and validating OpenAI API endpoi
 
 - Node.js 16+
 - pnpm (recommended) or npm
+- Docker & Docker Compose (for containerized deployment)
 
 ### Installation
 
+#### Local Development
 1. Clone the repository
 ```bash
 git clone https://github.com/Violet-Asuka/openai-api-tester.git
@@ -86,6 +89,27 @@ pnpm dev
 4. Build for production
 ```bash
 pnpm build
+```
+
+#### Docker Deployment
+1. Build and start the container
+```bash
+docker-compose up -d
+```
+
+2. View logs
+```bash
+docker-compose logs -f
+```
+
+3. Stop the service
+```bash
+docker-compose down
+```
+
+4. Rebuild and restart (after code changes)
+```bash
+docker-compose up -d --build
 ```
 
 ## 📖 Usage
@@ -115,11 +139,32 @@ This project is open source and available under the MIT License.
 - The React and Tailwind CSS communities
 - All contributors who help improve this project
 
-## 🚀 Deployment
+## 🚀 Deployment Options
 
-### Deploy on Vercel
+### Docker Deployment (Recommended)
 
-The easiest way to deploy this app is to use the [Vercel Platform](https://vercel.com).
+The project includes Docker configuration for easy deployment:
+
+```bash
+# Clone the repository
+git clone https://github.com/Violet-Asuka/openai-api-tester.git
+cd openai-api-tester
+
+# Build and start with Docker Compose
+docker-compose up -d
+```
+
+The application will be available at `http://localhost:80`
+
+### Configuration
+
+- The default port is 80, you can change it in `docker-compose.yml`
+- Nginx configuration can be modified in `nginx.conf`
+- Environment variables can be added in `docker-compose.yml`
+
+### Vercel Deployment
+
+The easier way to deploy this app is to use the [Vercel Platform](https://vercel.com).
 
 1. Fork this repository
 2. Import your fork to Vercel:
