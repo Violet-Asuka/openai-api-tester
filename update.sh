@@ -12,4 +12,4 @@ docker-compose up -d --build
 echo "Cleaning up..."
 docker system prune -f
 
-echo "Done! Application should be running at http://localhost:3000" 
+echo "Done! Application should be running at http://localhost:3007" 
