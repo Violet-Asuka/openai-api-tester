@@ -6,7 +6,7 @@
 
 A modern, intuitive web application for testing and validating OpenAI API endpoints. Built with React, TypeScript, and Tailwind CSS.
 
-[Live Demo](#) · [Report Bug](../../issues) · [Request Feature](../../issues)
+[Live Demo](http://72.18.83.136:3007/) · [Report Bug](../../issues) · [Request Feature](../../issues)
 
 </div>
 
