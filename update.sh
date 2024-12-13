@@ -1,5 +1,14 @@
 #!/bin/bash
 
+echo "Pulling latest changes..."
+git pull origin main
+
+# Check if there are merge conflicts
+if [ $? -ne 0 ]; then
+  echo "Error: Merge conflicts detected. Please resolve them manually."
+  exit 1
+fi
+
 echo "Stopping containers..."
 docker-compose down
 
